@@ -1,0 +1,8 @@
+/bin
+/.vscode
+*.sln
+*.vcxproj
+*.filters
+*.user
+/.vs
+*.sublime-workspace
