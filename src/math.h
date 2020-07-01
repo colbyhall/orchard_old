@@ -39,9 +39,26 @@ inline Vector2 v2_norm(Vector2 a) {
 
 inline f32 v2_dot(Vector2 a, Vector2 b)     { return a.x * b.x + a.y * b.y; }
 inline f32 v2_cross(Vector2 a, Vector2 b)   { return a.x * b.y - a.y * b.x; }
+inline Vector2 v2_perp(Vector2 a)           { return v2(a.y, -a.x); }
 
 static const Vector2 v2_up     = { 0.f, 1.f };
 static const Vector2 v2_right  = { 1.f, 0.f };
+
+typedef union Vector3 {
+    struct { f32 x, y, z; };
+    struct { f32 r, g, b; };
+    struct { f32 u, v; };
+    struct { Vector2 xy; };
+    struct { f32 _pad; Vector2 yz; };
+    f32 e[3];
+} Vector3;
+
+inline Vector3 v3(f32 x, f32 y, f32 z) { return (Vector3) { x, y, z }; }
+inline Vector3 v3s(f32 s) { return v3(s, s, s); }
+inline Vector3 v3z(void) { return v3s(0.f); }
+inline Vector3 v3xy(Vector2 xy, f32 z) { return v3(xy.x, xy.y, z); }
+
+inline Vector3 v3_negate(Vector3 a) { return v3(-a.x, -a.y, -a.z); }
 
 typedef union Vector4 {
     struct { f32 x, y, z, w; };
@@ -64,7 +81,7 @@ Matrix4 m4_mul(Matrix4 a, Matrix4 b);
 Matrix4 m4_identity(void);
 Matrix4 m4_ortho(f32 size, f32 aspect_ratio, f32 far, f32 near);
 Matrix4 m4_persp(f32 fov, f32 asepct_ratio, f32 far, f32 near);
-// Matrix4 m4_translate(Vector3 translation);
+Matrix4 m4_translate(Vector3 translation);
 // Matrix4 m4_rotate(Vector3 axis, f32 angle);
 
 typedef struct Rect {

@@ -1,7 +1,7 @@
 #ifndef PLATFORM_H
 #define PLATFORM_H
 
-#include "memory.h"
+#include "language_layer.h"
 
 enum {
     FF_Read     = (1 << 0),
@@ -13,7 +13,7 @@ enum {
 typedef struct File_Handle {
     void* os_handle;
     int flags;
-    usize size; // @TODO(colby): Investigate if this is worth having here
+    int size; // @TODO(colby): Investigate if this is worth having here
 } File_Handle; 
 
 #define PLATFORM_OPEN_FILE(name) b32 name(const char* path, int flags, File_Handle* handle)
@@ -38,8 +38,26 @@ typedef struct Platform {
     Platform_Write_File*    write_file;
 
     void* window_handle;
+    int window_width;
+    int window_height;
+
+    f64 current_frame_time;
+    f64 last_frame_time;
 } Platform;
 
 extern Platform* g_platform;
+
+inline b32 read_file_into_string(const char* path, String* string, Allocator allocator) {
+    File_Handle handle;
+    if (!g_platform->open_file(path, FF_Read, &handle)) return false;
+
+    u8* the_memory = mem_alloc(allocator, handle.size + 1);
+    if (!g_platform->read_file(handle, the_memory, handle.size)) return false;
+
+    the_memory[handle.size] = 0;
+    *string = (String) { the_memory, handle.size, allocator };
+
+    return true;
+}
 
 #endif /* PLATFORM_H */

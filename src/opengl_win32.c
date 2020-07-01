@@ -7,12 +7,7 @@ WGL_Swap_Interval_Ext wglSwapIntervalEXT = 0;
 #define LOAD_GL_BINDINGS(type, func) func = (type)wglGetProcAddress(#func);
 #define CHECK_GL_BINDINGS(type, func) if (!func) return false;
 
-typedef struct OpenGL_Context {
-    GLint maj_version, min_version;
-    b32 is_initialized;
-} OpenGL_Context;
-
-static OpenGL_Context* g_gl_context = 0;
+extern OpenGL_Context* g_gl_context;
 
 b32 init_opengl(Platform* platform) {
     Allocator arena = platform->permanent_arena;
@@ -121,6 +116,12 @@ b32 init_opengl(Platform* platform) {
     printf("[OpenGL] Loaded opengl with version %i:%i.", g_gl_context->maj_version, g_gl_context->min_version);
 
     return true;
+}
+
+void swap_gl_buffers(Platform* platform) {
+    HDC window_context = GetDC(platform->window_handle);
+    SwapBuffers(window_context);
+    ReleaseDC((HWND)platform->window_handle, window_context);
 }
 
 #undef LOAD_GL_BINDINGS

@@ -1,5 +1,4 @@
 #include "platform.h"
-#include "memory.h"
 #include "memory.c"
 #include "program_options.h"
 
@@ -26,7 +25,7 @@ typedef struct Game_Code {
 #define INIT_GAME(name) void name(Platform* platform)
 typedef INIT_GAME(Init_Game);
 
-#define TICK_GAME(name) void name(void)
+#define TICK_GAME(name) void name(f32 dt)
 typedef TICK_GAME(Tick_Game);
 
 #define SHUTDOWN_GAME(name) void name(void)
@@ -75,7 +74,7 @@ static PLATFORM_OPEN_FILE(win32_open_file) {
         const DWORD attrib = GetFileAttributesA(path);
         if (attrib & FILE_ATTRIBUTE_READONLY) flags |= FF_ReadOnly;
 
-        const usize size = (usize)GetFileSize(os_handle, 0);
+        const int size = (int)GetFileSize(os_handle, 0);
         *handle = (File_Handle) { os_handle, flags, size };
         return true;
     }
@@ -166,22 +165,38 @@ int main(int argv, char** argc) {
         );
         assert(window_handle != INVALID_HANDLE_VALUE);
 
-        the_platform.window_handle = window_handle;
+        the_platform.window_handle  = window_handle;
+        the_platform.window_width   = WINDOW_WIDTH;
+        the_platform.window_height  = WINDOW_HEIGHT;
     }
     g_platform = &the_platform;
 
     game_code_vtable.init_game(g_platform);
 
+    LARGE_INTEGER qpc_freq;
+    QueryPerformanceFrequency(&qpc_freq);
+
     ShowWindow(window_handle, SW_SHOW);
 
+    LARGE_INTEGER last_frame_time;
+    QueryPerformanceCounter(&last_frame_time);
     while (is_running) {
+        LARGE_INTEGER current_frame_time;
+        QueryPerformanceCounter(&current_frame_time);
+
+        // Update frame timing
+        g_platform->last_frame_time = last_frame_time.QuadPart / (f64)qpc_freq.QuadPart;
+        g_platform->current_frame_time = current_frame_time.QuadPart / (f64)qpc_freq.QuadPart;
+        last_frame_time = current_frame_time;
+
         MSG msg;
         while (PeekMessageA(&msg, 0, 0, 0, PM_REMOVE)) {
             TranslateMessage(&msg);
             DispatchMessage(&msg);
         }
 
-        game_code_vtable.tick_game();
+        const f32 dt  = (f32)(g_platform->current_frame_time - g_platform->last_frame_time);
+        game_code_vtable.tick_game(dt);
     }
 
     game_code_vtable.shutdown_game();

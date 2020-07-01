@@ -54,7 +54,6 @@ Matrix4 m4_persp(f32 fov, f32 asepct_ratio, f32 far, f32 near) {
     return result;
 }
 
-/*
 Matrix4 m4_translate(Vector3 translation) {
     Matrix4 result = m4_identity();
     result.e[0 + 3 * 4] = translation.x;
@@ -63,6 +62,7 @@ Matrix4 m4_translate(Vector3 translation) {
     return result;
 }
 
+/*
 Matrix4 m4_rotate(Vector3 axis, f32 angle) {
     Matrix4 result = m4_identity();
     const f32 r = angle * TO_RAD;

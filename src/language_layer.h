@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <stdarg.h>
 
 #if defined(_WIN64) || defined(__x86_64__) || defined(_M_X64) || defined(__64BIT__) || defined(__powerpc64__) || defined(__ppc64__)
 #define PLATFORM_64BIT 1
@@ -161,5 +162,41 @@ inline void _assert_implementation(b32 cond, b32 do_segfault, u32 line, const ch
 #define mem_move    memmove
 #define str_len     strlen
 
+typedef struct Allocator {
+    void* data;
+    void* (*proc)(struct Allocator allocator, void* ptr, usize size, usize alignment);
+} Allocator;
+
+inline void* mem_alloc_aligned(Allocator allocator, usize size, usize alignment) {
+    return allocator.proc(allocator, 0, size, alignment);
+}
+
+inline void* mem_alloc(Allocator allocator, usize size) { 
+    return mem_alloc_aligned(allocator, size, 4);
+}
+
+#define mem_alloc_struct(allocator, type) mem_alloc(allocator, sizeof(type))
+
+inline void mem_free(Allocator allocator, void* ptr) {
+    allocator.proc(allocator, ptr, 0, 0);
+}
+
+Allocator heap_allocator(void);
+
+typedef struct Memory_Arena {
+    u8*     base;
+    usize   used;
+    usize   total;
+} Memory_Arena;
+
+Allocator arena_allocator(void* base, usize size);
+
+typedef u32 Rune;
+
+typedef struct String {
+    u8* data;
+    int len;
+    Allocator allocator;
+} String;
 
 #endif /* LANGUAGE_LAYER_H */

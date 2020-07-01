@@ -225,5 +225,50 @@ GL_BINDINGS(DECLARE_GL_FUNCTIONS)
 #undef  DECLARE_GL_FUNCTIONS
 
 b32 init_opengl(Platform* platform);
+void swap_gl_buffers(Platform* platform);
+
+typedef struct Texture2D {
+    u8* pixels;
+    int width, height, depth;
+
+    GLuint id;
+} Texture2D;
+
+#define SHADER_UNFORM_NAME_CAP 48
+typedef struct Shader_Uniform {
+    GLchar name[SHADER_UNFORM_NAME_CAP];
+    int name_len;
+
+    GLenum type;
+    GLint location;
+} Shader_Uniform;
+
+#define SHADER_UNIFORM_CAP 16
+typedef struct Shader {
+    GLuint id;
+
+    GLchar* source;
+    int source_len;
+
+    Shader_Uniform uniforms[SHADER_UNIFORM_CAP];
+    int num_uniforms;
+} Shader;
+
+b32 init_shader(Shader* shader);
+b32 free_shader(Shader* shader);
+
+b32 set_uniform_m4(const char* name, Matrix4 m);
+b32 set_uniform_texture(const char* name, Texture2D* t);
+
+void set_shader(Shader* s);
+Shader* get_bound_shader(void);
+
+typedef struct OpenGL_Context {
+    GLint maj_version, min_version;
+
+    Shader* bound_shader;
+
+    b32 is_initialized;
+} OpenGL_Context;
 
 #endif /* OPENGL_H */
