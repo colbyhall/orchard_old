@@ -22,6 +22,7 @@ typedef union Vector2 {
 inline Vector2 v2(f32 x, f32 y) { return (Vector2) { x, y }; }
 inline Vector2 v2s(f32 s) { return v2(s, s); }
 inline Vector2 v2z(void) { return v2s(0.f); }
+inline Vector2 v2rad(f32 r) { return v2(sinf(r), cosf(r)); }
 
 inline Vector2 v2_add(Vector2 a, Vector2 b) { return v2(a.x + b.x, a.y + b.y); }
 inline Vector2 v2_sub(Vector2 a, Vector2 b) { return v2(a.x - b.x, a.y - b.y); }
@@ -40,6 +41,7 @@ inline Vector2 v2_norm(Vector2 a) {
 inline f32 v2_dot(Vector2 a, Vector2 b)     { return a.x * b.x + a.y * b.y; }
 inline f32 v2_cross(Vector2 a, Vector2 b)   { return a.x * b.y - a.y * b.x; }
 inline Vector2 v2_perp(Vector2 a)           { return v2(a.y, -a.x); }
+inline Vector2 v2_negate(Vector2 a)         { return v2(-a.x, -a.y); }
 
 static const Vector2 v2_up     = { 0.f, 1.f };
 static const Vector2 v2_right  = { 1.f, 0.f };
@@ -58,7 +60,33 @@ inline Vector3 v3s(f32 s) { return v3(s, s, s); }
 inline Vector3 v3z(void) { return v3s(0.f); }
 inline Vector3 v3xy(Vector2 xy, f32 z) { return v3(xy.x, xy.y, z); }
 
+inline Vector3 v3_add(Vector3 a, Vector3 b) { return v3(a.x + b.x, a.y + b.y, a.z + b.z); }
+inline Vector3 v3_sub(Vector3 a, Vector3 b) { return v3(a.x - b.x, a.y - b.y, a.z - b.z); }
+inline Vector3 v3_mul(Vector3 a, Vector3 b) { return v3(a.x * b.x, a.y * b.y, a.z * b.z); }
+inline Vector3 v3_div(Vector3 a, Vector3 b) { return v3(a.x / b.x, a.y / b.y, a.z / b.z); }
+
+inline f32 v3_len_sq(Vector3 a) { return a.x * a.x + a.y * a.y + a.z * a.z; }
+inline f32 v3_len(Vector3 a) { return sqrtf(v3_len_sq(a)); }
+
+inline Vector3 v3_norm(Vector3 a) {
+    const f32 len = v3_len(a);
+    if (len > 0.f) return v3_div(a / v3s(len));
+    return v3z();
+}
+
+inline f32 v3_dot(Vector3 a, Vector3 b) { return a.x * b.x + a.y * b.y + a.z * b.z; }
 inline Vector3 v3_negate(Vector3 a) { return v3(-a.x, -a.y, -a.z); }
+inline Vector3 v3_cross(Vector3 a, Vector3 b) {
+    return v3(
+        a.y * b.z - a.z * b.y,
+        a.z * b.x - a.x * b.z,
+        a.x * b.y - a.y * b.x
+    );
+}
+
+static const Vector3 v3_up      = { 0.f, 0.f, 1.f };
+static const Vector3 v3_right   = { 0.f, 1.f, 0.f };
+static const Vector3 v3_forward = { 1.f, 0.f, 0.f };
 
 typedef union Vector4 {
     struct { f32 x, y, z, w; };
@@ -66,7 +94,7 @@ typedef union Vector4 {
     struct { f32 r, g, b, a; };
     struct { f32 _pad[2]; f32 width, height; };
     Vector2 xy;
-    // Vector3 xyz;
+    Vector3 xyz;
     f32 e[4];
 } Vector4;
 
