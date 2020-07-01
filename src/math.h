@@ -70,7 +70,7 @@ inline f32 v3_len(Vector3 a) { return sqrtf(v3_len_sq(a)); }
 
 inline Vector3 v3_norm(Vector3 a) {
     const f32 len = v3_len(a);
-    if (len > 0.f) return v3_div(a / v3s(len));
+    if (len > 0.f) return v3_div(a, v3s(len));
     return v3z();
 }
 
