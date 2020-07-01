@@ -1,33 +1,9 @@
 #ifndef DRAW_H
 #define DRAW_H
 
-#include "opengl.h"
 #include "math.h"
 
-typedef struct Immediate_Vertex {
-    Vector3 position;
-    Vector3 normal;
-    Vector2 uv;
-    Vector4 color;
-} Immediate_Vertex;
-
-// Must be multiple of 3
-#define MAX_IMM_VERTS (1024 * 3)
-
-typedef struct Immediate_Renderer {
-    GLuint vao, vbo;
-    Immediate_Vertex vertices[MAX_IMM_VERTS];
-    int vertex_count;
-
-    Matrix4 projection;
-    Matrix4 view;
-
-    b32 is_initialized;
-} Immediate_Renderer;
-
-extern Shader* solid_shape_shader;
-
-void init_imm_renderer(Allocator allocator);
+void init_draw(Allocator allocator);
 
 void imm_refresh_transform(void);
 void imm_render_right_handed(Rect viewport);

@@ -1,9 +1,32 @@
 #include "draw.h"
+#include "opengl.h"
+
+typedef struct Immediate_Vertex {
+    Vector3 position;
+    Vector3 normal;
+    Vector2 uv;
+    Vector4 color;
+} Immediate_Vertex;
+
+// Must be multiple of 3
+#define MAX_IMM_VERTS (1024 * 3)
+
+typedef struct Immediate_Renderer {
+    GLuint vao, vbo;
+    Immediate_Vertex vertices[MAX_IMM_VERTS];
+    int vertex_count;
+
+    Matrix4 projection;
+    Matrix4 view;
+
+    b32 is_initialized;
+} Immediate_Renderer;
+static Immediate_Renderer* g_imm_renderer = 0;
+
+Shader* solid_shape_shader = 0;
 
 #define FAR_CLIP_PLANE 1000.f
 #define NEAR_CLIP_PLANE 0.1
-static Immediate_Renderer* g_imm_renderer = 0;
-Shader* solid_shape_shader = 0;
 
 const char* solid_shape_shader_source = 
 "#ifdef VERTEX\n\
@@ -37,7 +60,7 @@ void main() {\n\
 }\n\
 #endif\n";
 
-void init_imm_renderer(Allocator allocator) {
+void init_draw(Allocator allocator) {
     g_imm_renderer = mem_alloc_struct(allocator, Immediate_Renderer);
 
     if (g_imm_renderer->is_initialized) return;
@@ -101,10 +124,15 @@ void imm_begin(void) {
 
 void imm_flush(void) {
     Shader* const bound_shader = get_bound_shader();
+    static b32 thrown_bound_shader_error = false;
     if (!bound_shader) {
-        printf("Tried to flush imm_renderer when no shader was bound");
+        if (!thrown_bound_shader_error) { 
+            printf("[Draw] Tried to flush imm_renderer when no shader was bound. \n");
+            thrown_bound_shader_error = true;
+        }
         return;
     }
+    thrown_bound_shader_error = false;
 
     glBindVertexArray(g_imm_renderer->vao);
     glBindBuffer(GL_ARRAY_BUFFER, g_imm_renderer->vbo);

@@ -1,6 +1,11 @@
 #ifndef OPENGL_H
 #define OPENGL_H
 
+// The goal is to eventually have a simple wrapper api around all graphics api's. After that we 
+// have that we can have seperate builds for certain graphics api's. In doing that we will want
+// all opengl methods to eventually be just in the implementation file instead of the header
+// - Colby 6/31/20
+
 #if PLATFORM_WINDOWS
 #include "opengl_win32.h"
 #endif
