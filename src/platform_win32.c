@@ -9,8 +9,7 @@
 
 Platform* g_platform;
 
-static b32 is_running = 1;
-static HWND window_handle;
+static b32 is_running = true;
 
 typedef struct Game_Code {
     HMODULE library;
@@ -71,14 +70,31 @@ static PLATFORM_OPEN_FILE(win32_open_file) {
 
     // If we actually opened the file then fill out the handle data
     if (is_open) {
-        const DWORD attrib = GetFileAttributesA(path);
-        if (attrib & FILE_ATTRIBUTE_READONLY) flags |= FF_ReadOnly;
-
-        const int size = (int)GetFileSize(os_handle, 0);
-        *handle = (File_Handle) { os_handle, flags, size };
+        const String wrapped_path = { (u8*)path, (int)str_len(path) };
+        *handle = (File_Handle) { os_handle, wrapped_path, flags };
         return true;
     }
     
+    return false;
+}
+
+static PLATFORM_FILE_METADATA(win32_file_metadata) {
+    WIN32_FILE_ATTRIBUTE_DATA file_data;
+    if (GetFileAttributesExA((const char*)handle.path.data, GetFileExInfoStandard, &file_data)) {
+        const FILETIME creation_time = file_data.ftCreationTime;
+        metadata->creation_time = (creation_time.dwHighDateTime << 16) | creation_time.dwLowDateTime;
+
+        const FILETIME last_access_time = file_data.ftLastAccessTime;
+        metadata->last_access_time = (last_access_time.dwHighDateTime << 16) | last_access_time.dwLowDateTime;
+
+        const FILETIME last_write_time = file_data.ftLastWriteTime;
+        metadata->last_write_time = (last_write_time.dwHighDateTime << 16) | last_write_time.dwLowDateTime;
+
+        metadata->size = (int)file_data.nFileSizeLow;
+        metadata->read_only = (file_data.dwFileAttributes & FILE_ATTRIBUTE_READONLY) != 0;
+        return true;
+    }
+
     return false;
 }
 
@@ -112,14 +128,14 @@ int main(int argv, char** argc) {
         assert(did_copy_file);
 
         game_code.function_count = ARRAY_COUNT(game_code_vtable_names);
-        game_code.functions = (void**)&game_code_vtable;
-        game_code.library = LoadLibraryA(game_code.dll_path);
+        game_code.functions      = (void**)&game_code_vtable;
+        game_code.library        = LoadLibraryA(game_code.dll_path);
         for (int i = 0; i < game_code.function_count; ++i) {
             game_code.functions[i] = (void*)GetProcAddress(game_code.library, game_code_vtable_names[i]);
         }
     }
 
-    Platform the_platform = (Platform) {
+    Platform the_platform = {
         .permanent_arena    = permanent_arena,
         .open_file          = win32_open_file,
     };
@@ -128,7 +144,7 @@ int main(int argv, char** argc) {
     {
         HINSTANCE hInstance = GetModuleHandle(0); // @Temp
 
-        WNDCLASSA window_class = (WNDCLASSA) {
+        const WNDCLASSA window_class = {
             .lpfnWndProc    = DefWindowProcA,
             .hInstance      = hInstance,
             .hbrBackground  = (HBRUSH)(COLOR_WINDOW + 1),
@@ -151,7 +167,7 @@ int main(int argv, char** argc) {
         const int x = monitor_width / 2 - width / 2;
         const int y = monitor_height / 2 - height / 2;
         
-        window_handle = CreateWindowA(
+        HWND window_handle = CreateWindowA(
             window_class.lpszClassName,
             WINDOW_TITLE,
             WS_OVERLAPPEDWINDOW,
@@ -176,7 +192,7 @@ int main(int argv, char** argc) {
     LARGE_INTEGER qpc_freq;
     QueryPerformanceFrequency(&qpc_freq);
 
-    ShowWindow(window_handle, SW_SHOW);
+    ShowWindow(the_platform.window_handle, SW_SHOW);
 
     LARGE_INTEGER last_frame_time;
     QueryPerformanceCounter(&last_frame_time);
@@ -185,8 +201,8 @@ int main(int argv, char** argc) {
         QueryPerformanceCounter(&current_frame_time);
 
         // Update frame timing
-        g_platform->last_frame_time = last_frame_time.QuadPart / (f64)qpc_freq.QuadPart;
-        g_platform->current_frame_time = current_frame_time.QuadPart / (f64)qpc_freq.QuadPart;
+        g_platform->last_frame_time     = last_frame_time.QuadPart / (f64)qpc_freq.QuadPart;
+        g_platform->current_frame_time  = current_frame_time.QuadPart / (f64)qpc_freq.QuadPart;
         last_frame_time = current_frame_time;
 
         MSG msg;
