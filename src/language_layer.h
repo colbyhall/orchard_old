@@ -182,6 +182,7 @@ inline void mem_free(Allocator allocator, void* ptr) {
 }
 
 Allocator heap_allocator(void);
+Allocator null_allocator(void); // Used for like stack allocated things
 
 typedef struct Memory_Arena {
     u8*     base;
@@ -190,6 +191,10 @@ typedef struct Memory_Arena {
 } Memory_Arena;
 
 Allocator arena_allocator(void* base, usize size);
+inline void reset_arena(Allocator allocator) {
+    Memory_Arena* const arena = allocator.data;
+    arena->used = 0;
+}
 
 typedef u32 Rune;
 
@@ -198,5 +203,8 @@ typedef struct String {
     int len;
     Allocator allocator;
 } String;
+
+#define FROM_LITERAL(cstr) (String) { (u8*)cstr, (int)str_len(cstr), null_allocator() }
+#define EXPAND_STRING(str) str.data, str.len 
 
 #endif /* LANGUAGE_LAYER_H */

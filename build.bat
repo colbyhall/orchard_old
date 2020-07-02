@@ -21,7 +21,7 @@ if "%1" == "release" (set mode=%release%)
 
 set opts=/I../deps/ /D_CRT_SECURE_NO_WARNINGS -diagnostics:column -WL
 set opts=%opts% -nologo -fp:fast -fp:except- -Gm- -GR- -EHa- -Zo -Oi -WX -W4 -wd4201 -wd4100 
-set opts=%opts% -wd4189 -wd4505 -wd4127 -wd4204 -FC -GS- -Gs9999999 %mode%
+set opts=%opts% -wd4189 -wd4505 -wd4127 -wd4204 -wd4221 -FC -GS- -Gs9999999 %mode%
 set links=-incremental:no -opt:ref "kernel32.lib" "user32.lib" "gdi32.lib" "opengl32.lib"
 
 REM @NOTE(colby): Buld game module

@@ -36,19 +36,19 @@ typedef PLATFORM_OPEN_FILE(Platform_Open_File);
 #define PLATFORM_CLOSE_FILE(name) b32 name(File_Handle* handle)
 typedef PLATFORM_CLOSE_FILE(Platform_Close_File);
 
-#define PLATFORM_READ_FILE(name) b32 name(File_Handle handle, void* dest, usize size)
+#define PLATFORM_READ_FILE(name) b32 name(File_Handle handle, void* dest, int size)
 typedef PLATFORM_READ_FILE(Platform_Read_File);
 
-#define PLATFORM_WRITE_FILE(name) b32 name(File_Handle handle, u8* ptr, usize size)
+#define PLATFORM_WRITE_FILE(name) b32 name(File_Handle handle, u8* ptr, int size)
 typedef PLATFORM_WRITE_FILE(Platform_Write_File);
 
-#define PLATFORM_FILE_METADATA(name) b32 name(File_Handle handle, File_Metadata* metadata)
+#define PLATFORM_FILE_METADATA(name) b32 name(const char* path, File_Metadata* metadata)
 typedef PLATFORM_FILE_METADATA(Platform_File_Metadata);
 
 typedef struct Platform {
     Allocator permanent_arena;
 
-    // Platform api
+    // The whole point of doing this is to build layers. We have a platform layer which contains our platform api
     Platform_Open_File*         open_file;
     Platform_Close_File*        close_file;
     Platform_Read_File*         read_file;
@@ -70,7 +70,7 @@ inline b32 read_file_into_string(const char* path, String* string, Allocator all
     if (!g_platform->open_file(path, FF_Read, &handle)) return false;
 
     File_Metadata metadata;
-    if (!g_platform->file_metadata(handle, &metadata)) {
+    if (!g_platform->file_metadata(path, &metadata)) {
         const b32 did_close = g_platform->close_file(&handle);
         assert(did_close);
 

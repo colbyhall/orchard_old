@@ -51,3 +51,11 @@ Allocator arena_allocator(void* base, usize size) {
 
     return (Allocator) { base, arena_alloc };
 }
+
+static void* null_alloc(Allocator allocator, void* ptr, usize size, usize alignment) {
+    return 0;
+}
+
+Allocator null_allocator(void) {
+    return (Allocator) { 0, null_alloc };
+}

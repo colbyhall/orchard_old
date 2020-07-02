@@ -50,6 +50,33 @@ static void new_dll_path(char* buffer) {
     last += 1;
 }
 
+static b32 try_reload_dll(Game_Code* game_code) {
+    File_Metadata metadata;
+    const b32 found_metadata = g_platform->file_metadata(dll_path, &metadata);
+    assert(found_metadata);
+
+    if (!game_code->library || game_code->last_write_time != metadata.last_write_time) {
+        new_dll_path(game_code->dll_path);
+        game_code->last_write_time = metadata.last_write_time;
+
+        const BOOL did_copy_file = CopyFileA(dll_path, game_code->dll_path, false);
+        if (!did_copy_file) return false;
+
+        if (game_code->library) {
+            FreeLibrary(game_code->library);
+        }
+
+        game_code->library = LoadLibraryA(game_code->dll_path);
+        for (int i = 0; i < game_code->function_count; ++i) {
+            game_code->functions[i] = (void*)GetProcAddress(game_code->library, game_code_vtable_names[i]);
+        }
+
+        return true;
+    }
+
+    return false;
+}
+
 static PLATFORM_OPEN_FILE(win32_open_file) {
     const b32 read   = flags & FF_Read;
     const b32 write  = flags & FF_Write;
@@ -78,9 +105,26 @@ static PLATFORM_OPEN_FILE(win32_open_file) {
     return false;
 }
 
+static PLATFORM_CLOSE_FILE(win32_close_file) {
+    if (!handle->os_handle) return false;
+
+    const b32 result = CloseHandle(handle->os_handle) == 1;
+    handle->os_handle = 0;
+    return result;
+}
+
+static PLATFORM_READ_FILE(win32_read_file) {
+    assert(handle.os_handle);
+    return ReadFile(handle.os_handle, dest, (DWORD)size, 0, 0);
+}
+
+static PLATFORM_WRITE_FILE(win32_write_file) {
+    return WriteFile(handle.os_handle, ptr, (DWORD)size, 0, 0);
+}
+
 static PLATFORM_FILE_METADATA(win32_file_metadata) {
     WIN32_FILE_ATTRIBUTE_DATA file_data;
-    if (GetFileAttributesExA((const char*)handle.path.data, GetFileExInfoStandard, &file_data)) {
+    if (GetFileAttributesExA(path, GetFileExInfoStandard, &file_data)) {
         const FILETIME creation_time = file_data.ftCreationTime;
         metadata->creation_time = (creation_time.dwHighDateTime << 16) | creation_time.dwLowDateTime;
 
@@ -119,25 +163,13 @@ int main(int argv, char** argc) {
         SetCurrentDirectoryA("..");
     }
 
-    // Load game code
-    Game_Code_VTable game_code_vtable;
-    Game_Code game_code;
-    {
-        new_dll_path(game_code.dll_path);
-        const BOOL did_copy_file = CopyFileA(dll_path, game_code.dll_path, false);
-        assert(did_copy_file);
-
-        game_code.function_count = ARRAY_COUNT(game_code_vtable_names);
-        game_code.functions      = (void**)&game_code_vtable;
-        game_code.library        = LoadLibraryA(game_code.dll_path);
-        for (int i = 0; i < game_code.function_count; ++i) {
-            game_code.functions[i] = (void*)GetProcAddress(game_code.library, game_code_vtable_names[i]);
-        }
-    }
-
     Platform the_platform = {
         .permanent_arena    = permanent_arena,
         .open_file          = win32_open_file,
+        .close_file         = win32_close_file,
+        .read_file          = win32_read_file,
+        .write_file         = win32_write_file,
+        .file_metadata      = win32_file_metadata,
     };
 
     // Create the window
@@ -187,6 +219,15 @@ int main(int argv, char** argc) {
     }
     g_platform = &the_platform;
 
+    // Load game code
+    Game_Code_VTable game_code_vtable;
+    Game_Code game_code = {
+        .function_count = ARRAY_COUNT(game_code_vtable_names),
+        .functions      = (void**)&game_code_vtable,
+    };
+    const b32 loaded_game_code = try_reload_dll(&game_code);
+    assert(loaded_game_code);
+
     game_code_vtable.init_game(g_platform);
 
     LARGE_INTEGER qpc_freq;
@@ -213,6 +254,12 @@ int main(int argv, char** argc) {
 
         const f32 dt  = (f32)(g_platform->current_frame_time - g_platform->last_frame_time);
         game_code_vtable.tick_game(dt);
+
+        // Do a hot reload if we can
+        if (try_reload_dll(&game_code)) {
+            reset_arena(the_platform.permanent_arena);
+            game_code_vtable.init_game(g_platform);
+        }
     }
 
     game_code_vtable.shutdown_game();

@@ -39,7 +39,7 @@ DLL_EXPORT void tick_game(f32 dt) {
     imm_render_right_handed(viewport);
 
     imm_begin();
-    imm_rect(rect_from_raw(0.f, 0.f, 500.f, 500.f), -5.f, v4(1.f, 1.f, 1.f, 1.f));
+    imm_rect(rect_from_raw(0.f, 0.f, 500.f, 500.f), -5.f, v4(1.f, 0.f, 1.f, 1.f));
     imm_flush();
 
     swap_gl_buffers(g_platform);
