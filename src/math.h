@@ -11,7 +11,7 @@
 #define MIN(a, b) (a < b ? a : b)
 #define MAX(a, b) (a < b ? b : a)
 #define CLAMP(x, min, max) (MIN(MAX(x, min), max))
-#define SIGN(x) (x < 0 ? -1 : 1)
+#define SIGN(x) (x < 0.f ? -1.f : 1.f)
 
 typedef union Vector2 {
     struct { f32 x, y; };

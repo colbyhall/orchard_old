@@ -139,7 +139,7 @@ b32 set_uniform_m4(const char* name, Matrix4 m) {
     return true;
 }
 
-b32 set_uniform_texture(const char* name, Texture2D* t) {
+b32 set_uniform_texture(const char* name, Texture2d* t) {
     Shader_Uniform* const var = find_uniform(name, GL_SAMPLER_2D);
     if (!var) return false; 
 

@@ -232,12 +232,12 @@ GL_BINDINGS(DECLARE_GL_FUNCTIONS)
 b32 init_opengl(Platform* platform);
 void swap_gl_buffers(Platform* platform);
 
-typedef struct Texture2D {
+typedef struct Texture2d {
     u8* pixels;
     int width, height, depth;
 
     GLuint id;
-} Texture2D;
+} Texture2d;
 
 #define SHADER_UNFORM_NAME_CAP 48
 typedef struct Shader_Uniform {
@@ -263,7 +263,7 @@ b32 init_shader(Shader* shader);
 b32 free_shader(Shader* shader);
 
 b32 set_uniform_m4(const char* name, Matrix4 m);
-b32 set_uniform_texture(const char* name, Texture2D* t);
+b32 set_uniform_texture(const char* name, Texture2d* t);
 
 void set_shader(Shader* s);
 Shader* get_bound_shader(void);

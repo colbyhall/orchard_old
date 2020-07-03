@@ -53,7 +53,7 @@ static void new_dll_path(char* buffer) {
 static b32 try_reload_dll(Game_Code* game_code) {
     File_Metadata metadata;
     const b32 found_metadata = g_platform->file_metadata(dll_path, &metadata);
-    assert(found_metadata);
+    if (!found_metadata) return false;
 
     if (!game_code->library || game_code->last_write_time != metadata.last_write_time) {
         new_dll_path(game_code->dll_path);

@@ -100,7 +100,7 @@ b32 rect_overlaps_rect(Rect a, Rect b, Rect* overlap) {
         overlap->max = v2(max_x, max_y);
     }
 
-    return !(b.min.x > a.max.x || b.max.x < a.min.x || b.max.y < a.min.y || b.min.y > a.max.y)
+    return !(b.min.x > a.max.x || b.max.x < a.min.x || b.max.y < a.min.y || b.min.y > a.max.y);
 }
 
 b32 rect_overlaps_point(Rect a, Vector2 b) {
@@ -111,10 +111,10 @@ b32 line_intersect_line(Vector2 a1, Vector2 a2, Vector2 b1, Vector2 b2, Vector2*
     const Vector2 a = v2_sub(a2, a1);
     const Vector2 b = v2_sub(b2, b1);
 
-    const f32 ab_cross  v2_cross(a, b);
+    const f32 ab_cross = v2_cross(a, b);
     if (ab_cross == 0.f) return false;
 
-    const Vector2 c = b1 - a1;
+    const Vector2 c = v2_sub(b1, a1);
     const f32 t = v2_cross(c, b) / ab_cross;
     if (t < 0.f || t > 1.f) return false;
 
@@ -136,7 +136,7 @@ b32 line_intersect_rect(Vector2 a1, Vector2 a2, Rect b, Rect_Intersect_Result* r
         const Vector2 b1 = b.min;
         const Vector2 b2 = v2(b.min.x, b.max.y);
         if (line_intersect_line(a1, a2, b1, b2, &result->intersection)) {
-            const Vector2 b_dir = v2_norm(b2 - b1); // We technically know this already
+            const Vector2 b_dir = v2_norm(v2_sub(b2, b1)); // We technically know this already
             result->normal = v2_perp(b_dir);
             return true;
         }
@@ -146,7 +146,7 @@ b32 line_intersect_rect(Vector2 a1, Vector2 a2, Rect b, Rect_Intersect_Result* r
         const Vector2 b1 = b.max;
         const Vector2 b2 = v2(b.max.x, b.min.y);
         if (line_intersect_line(a1, a2, b1, b2, &result->intersection)) {
-            const Vector2 b_dir = v2_norm(b2 - b1); // We technically know this already
+            const Vector2 b_dir = v2_norm(v2_sub(b2, b1)); // We technically know this already
             result->normal = v2_perp(b_dir);
             return true;
         }
@@ -156,7 +156,7 @@ b32 line_intersect_rect(Vector2 a1, Vector2 a2, Rect b, Rect_Intersect_Result* r
         const Vector2 b1 = b.min;
         const Vector2 b2 = v2(b.max.x, b.min.y);
         if (line_intersect_line(a1, a2, b1, b2, &result->intersection)) {
-            const Vector2 b_dir = v2_norm(b2 - b1); // We technically know this already
+            const Vector2 b_dir = v2_norm(v2_sub(b2, b1)); // We technically know this already
             result->normal = v2_perp(b_dir);
             return true;
         }
@@ -166,7 +166,7 @@ b32 line_intersect_rect(Vector2 a1, Vector2 a2, Rect b, Rect_Intersect_Result* r
         const Vector2 b1 = b.max;
         const Vector2 b2 = v2(b.min.x, b.max.y);
         if (line_intersect_line(a1, a2, b1, b2, &result->intersection)) {
-            const Vector2 b_dir = v2_norm(b2 - b1); // We technically know this already
+            const Vector2 b_dir = v2_norm(v2_sub(b2, b1)); // We technically know this already
             result->normal = v2_perp(b_dir);
             return true;
         }
