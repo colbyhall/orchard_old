@@ -62,6 +62,7 @@ void main() {\n\
 
 void init_draw(Allocator allocator) {
     g_imm_renderer = mem_alloc_struct(allocator, Immediate_Renderer);
+    solid_shape_shader = mem_alloc_struct(allocator, Shader);
 
     if (g_imm_renderer->is_initialized) return;
 
@@ -87,7 +88,6 @@ void init_draw(Allocator allocator) {
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     g_imm_renderer->is_initialized = true;
 
-    solid_shape_shader = mem_alloc_struct(allocator, Shader);
     solid_shape_shader->source = (GLchar*)solid_shape_shader_source;
     solid_shape_shader->source_len = (int)str_len(solid_shape_shader_source);
     if (!init_shader(solid_shape_shader)) assert(false);

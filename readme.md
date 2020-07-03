@@ -3,6 +3,7 @@ A 2D platformer prototype in the works. Could become a game. Leaving public for 
 
 ## Features
 * OpenGL Renderer
+* Hot code reload
 
 ## Dependencies
 * C Runtime

@@ -62,6 +62,7 @@ Matrix4 m4_translate(Vector3 translation) {
     return result;
 }
 
+
 /*
 Matrix4 m4_rotate(Vector3 axis, f32 angle) {
     Matrix4 result = m4_identity();
@@ -87,3 +88,122 @@ Matrix4 m4_rotate(Vector3 axis, f32 angle) {
     return result;
 }
 */
+
+b32 rect_overlaps_rect(Rect a, Rect b, Rect* overlap) {
+    if (overlap) {
+        const f32 min_x = (a.min.x < b.min.x) ? b.min.x : a.min.x;
+        const f32 min_y = (a.min.y < b.min.y) ? b.min.y : a.min.y;
+        const f32 max_x = (a.max.x > b.max.x) ? b.max.x : a.max.x;
+        const f32 max_y = (a.max.y > b.max.y) ? b.max.y : a.max.y;
+
+        overlap->min = v2(min_x, min_y);
+        overlap->max = v2(max_x, max_y);
+    }
+
+    return !(b.min.x > a.max.x || b.max.x < a.min.x || b.max.y < a.min.y || b.min.y > a.max.y)
+}
+
+b32 rect_overlaps_point(Rect a, Vector2 b) {
+    return !(b.x < a.min.x || b.x > a.max.x || b.y < a.min.y || b.y > a.max.y);
+}
+
+b32 line_intersect_line(Vector2 a1, Vector2 a2, Vector2 b1, Vector2 b2, Vector2* intersection) {
+    const Vector2 a = v2_sub(a2, a1);
+    const Vector2 b = v2_sub(b2, b1);
+
+    const f32 ab_cross  v2_cross(a, b);
+    if (ab_cross == 0.f) return false;
+
+    const Vector2 c = b1 - a1;
+    const f32 t = v2_cross(c, b) / ab_cross;
+    if (t < 0.f || t > 1.f) return false;
+
+    const f32 u = v2_cross(c, a) / ab_cross;
+    if (u < 0.f || u > 1.f) return false;
+
+    if (intersection) *intersection = v2_add(a1, v2_mul(a, v2s(t)));
+
+    return true;
+}
+
+b32 line_intersect_rect(Vector2 a1, Vector2 a2, Rect b, Rect_Intersect_Result* result) {
+    const Vector2 a     = v2_sub(a2, a1);
+    const Vector2 dir   = v2_norm(a);
+    const f32 dot_up    = v2_dot(v2_up, dir);
+    const f32 dot_right = v2_dot(v2_right, dir);
+
+    if (dot_right > 0.5f) {
+        const Vector2 b1 = b.min;
+        const Vector2 b2 = v2(b.min.x, b.max.y);
+        if (line_intersect_line(a1, a2, b1, b2, &result->intersection)) {
+            const Vector2 b_dir = v2_norm(b2 - b1); // We technically know this already
+            result->normal = v2_perp(b_dir);
+            return true;
+        }
+    }
+
+    if (dot_right < 0.5f) {
+        const Vector2 b1 = b.max;
+        const Vector2 b2 = v2(b.max.x, b.min.y);
+        if (line_intersect_line(a1, a2, b1, b2, &result->intersection)) {
+            const Vector2 b_dir = v2_norm(b2 - b1); // We technically know this already
+            result->normal = v2_perp(b_dir);
+            return true;
+        }
+    }
+
+    if (dot_up > 0.5f) {
+        const Vector2 b1 = b.min;
+        const Vector2 b2 = v2(b.max.x, b.min.y);
+        if (line_intersect_line(a1, a2, b1, b2, &result->intersection)) {
+            const Vector2 b_dir = v2_norm(b2 - b1); // We technically know this already
+            result->normal = v2_perp(b_dir);
+            return true;
+        }
+    }
+
+    if (dot_up < 0.5f) {
+        const Vector2 b1 = b.max;
+        const Vector2 b2 = v2(b.min.x, b.max.y);
+        if (line_intersect_line(a1, a2, b1, b2, &result->intersection)) {
+            const Vector2 b_dir = v2_norm(b2 - b1); // We technically know this already
+            result->normal = v2_perp(b_dir);
+            return true;
+        }
+    }
+
+    return false;
+}
+
+b32 rect_sweep_rect(Vector2 a1, Vector2 a2, Vector2 size, Rect b, Rect_Intersect_Result* result) {
+    const Vector2 half_size = v2_div(size, v2s(2.f));
+    const Rect large_b = { v2_sub(b.min, half_size), v2_add(b.max, half_size) };
+
+    if (line_intersect_rect(a1, a2, large_b, result)) return true;
+
+    const Vector2 b_pos = v2((b.max.x - b.min.x) + b.min.x, (b.max.y - b.min.y) + b.min.y);
+
+    Rect overlap;
+    const Rect at_end = rect_from_pos(a2, size);
+    if (rect_overlaps_rect(at_end, b, &overlap)) {
+        const Vector2 overlap_size = rect_size(overlap);
+        Vector2 intersection = a2;
+        Vector2 normal = v2z();
+
+        if (overlap_size.x > overlap_size.y) {
+            const f32 flip = SIGN(a2.y - b_pos.y);
+            intersection.y += overlap_size.y * flip;
+            normal.y = flip;
+        } else {
+            const f32 flip = SIGN(a2.x - b_pos.x);
+            intersection.x += overlap_size.x * flip;
+            normal.x = flip;
+        }
+
+        *result = (Rect_Intersect_Result) { intersection, normal };
+
+        return true;
+    }
+
+    return false;
+}

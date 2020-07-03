@@ -11,6 +11,7 @@
 #define MIN(a, b) (a < b ? a : b)
 #define MAX(a, b) (a < b ? b : a)
 #define CLAMP(x, min, max) (MIN(MAX(x, min), max))
+#define SIGN(x) (x < 0 ? -1 : 1)
 
 typedef union Vector2 {
     struct { f32 x, y; };
@@ -125,5 +126,19 @@ inline Rect rect_from_pos(Vector2 pos, Vector2 size) {
     return (Rect) { min, max };
 }
 inline Vector2 rect_size(Rect a) { return v2_sub(a.max, a.min); }
+
+b32 rect_overlaps_rect(Rect a, Rect b, Rect* overlap);
+b32 rect_overlaps_point(Rect a, Vector2 b);
+
+b32 line_intersect_line(Vector2 a1, Vector2 a2, Vector2 b1, Vector2 b2, Vector2* intersection);
+
+typedef struct Rect_Intersect_Result {
+    Vector2 intersection;
+    Vector2 normal;
+} Rect_Intersect_Result;
+
+b32 line_intersect_rect(Vector2 a1, Vector2 a2, Rect b, Rect_Intersect_Result* result);
+b32 rect_sweep_rect(Vector2 a1, Vector2 a2, Vector2 size, Rect b, Rect_Intersect_Result* result);
+
 
 #endif /* MATH_H */
