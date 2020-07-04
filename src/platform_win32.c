@@ -6,6 +6,7 @@
 #define WIN32_LEAN_AND_MEAN
 #define win32_MEAN_AND_LEAN
 #include <windows.h>
+#include <windowsx.h>
 
 Platform* g_platform;
 
@@ -142,6 +143,65 @@ static PLATFORM_FILE_METADATA(win32_file_metadata) {
     return false;
 }
 
+static LRESULT the_window_proc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam) {
+    switch (Msg) {
+    case WM_DESTROY:
+        is_running = false;
+        break;
+    case WM_SYSKEYDOWN:
+    case WM_KEYDOWN:
+        g_platform->input.keys_down[(u8)wParam] = true;
+        break;
+    case WM_SYSKEYUP:
+    case WM_KEYUP:
+        g_platform->input.keys_down[(u8)wParam] = false;
+        break;
+    case WM_LBUTTONDOWN:
+        g_platform->input.mouse_buttons_down[MOUSE_LEFT] = true;
+        SetCapture((HWND)g_platform->window_handle);
+        break;
+    case WM_LBUTTONUP:
+        g_platform->input.mouse_buttons_down[MOUSE_LEFT] = false;
+        ReleaseCapture();
+        break;
+    case WM_RBUTTONDOWN:
+        g_platform->input.mouse_buttons_down[MOUSE_RIGHT] = true;
+        SetCapture((HWND)g_platform->window_handle);
+        break;
+    case WM_RBUTTONUP:
+        g_platform->input.mouse_buttons_down[MOUSE_RIGHT] = false;
+        ReleaseCapture();
+        break;
+    case WM_MBUTTONDOWN:
+        g_platform->input.mouse_buttons_down[MOUSE_MIDDLE] = true;
+        SetCapture((HWND)g_platform->window_handle);
+        break;
+    case WM_MBUTTONUP:
+        g_platform->input.mouse_buttons_down[MOUSE_MIDDLE] = false;
+        ReleaseCapture();
+        break;
+    case WM_MOUSEWHEEL:
+        g_platform->input.mouse_wheel_delta = GET_WHEEL_DELTA_WPARAM(wParam);
+        break;
+    case WM_MOUSEMOVE: {
+        const int mouse_x = GET_X_LPARAM(lParam);
+        const int mouse_y = GET_Y_LPARAM(lParam);
+        
+        g_platform->input.mouse_x = mouse_x;
+        g_platform->input.mouse_y = g_platform->window_height - mouse_y;
+    } break;
+    case WM_SIZE:
+    case WM_SIZING:
+        RECT viewport = { 0 };
+        GetClientRect((HWND)g_platform->window_handle, &viewport);
+        g_platform->window_width  = viewport.right - viewport.left;
+        g_platform->window_height = viewport.bottom - viewport.top;
+        break;
+    }
+
+    return DefWindowProcA(hWnd, Msg, wParam, lParam);
+}
+
 int main(int argv, char** argc) {
     Allocator permanent_arena = arena_allocator(
         VirtualAlloc(0, PERMANENT_MEMORY_SIZE, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE),
@@ -177,7 +237,7 @@ int main(int argv, char** argc) {
         HINSTANCE hInstance = GetModuleHandle(0); // @Temp
 
         const WNDCLASSA window_class = {
-            .lpfnWndProc    = DefWindowProcA,
+            .lpfnWndProc    = the_window_proc,
             .hInstance      = hInstance,
             .hbrBackground  = (HBRUSH)(COLOR_WINDOW + 1),
             .lpszClassName  = WINDOW_TITLE " window class",
@@ -246,6 +306,12 @@ int main(int argv, char** argc) {
         g_platform->current_frame_time  = current_frame_time.QuadPart / (f64)qpc_freq.QuadPart;
         last_frame_time = current_frame_time;
 
+        // Reset input state
+        g_platform->input.mouse_dx = 0;
+        g_platform->input.mouse_dy = 0;
+        g_platform->input.mouse_wheel_delta = 0;
+
+        // Poll input from the window
         MSG msg;
         while (PeekMessageA(&msg, 0, 0, 0, PM_REMOVE)) {
             TranslateMessage(&msg);

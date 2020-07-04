@@ -2,6 +2,7 @@
 #define PLATFORM_H
 
 #include "language_layer.h"
+#include "input.h"
 
 enum File_Flags {
     FF_Read     = (1 << 0),
@@ -61,6 +62,8 @@ typedef struct Platform {
 
     f64 current_frame_time;
     f64 last_frame_time;
+
+    Input_State input;
 } Platform;
 
 extern Platform* g_platform;

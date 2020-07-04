@@ -43,6 +43,18 @@ typedef struct Entity {
 
     Vector3 position;
     Vector2 bounds;
+
+    union {
+        // ET_Character
+        struct {
+            Vector2 velocity;
+            b32 pressed_jump;
+        };
+        // ET_Static_Object
+        struct {
+            Vector3 color;
+        };
+    };
 } Entity;
 
 #define ENTITIES_CAP 256
@@ -141,8 +153,133 @@ macro(ET_Character, tick_character)
 macro(ET_Character, draw_character) \
 macro(ET_Static_Object, draw_static_object)
 
-static void tick_character(Entity* e, f32 dt) {
+#define GRAVITY_CONSTANT -980.f
 
+typedef struct Game_State {
+    Entity_Manager entity_manager;
+
+    Vector2 current_cam_pos;
+    Vector2 target_cam_pos;
+
+    b32 is_initialized;
+} Game_State;
+
+static Game_State* g_game_state;
+
+static void tick_character(Entity* e, f32 dt) {
+    e->velocity.y += GRAVITY_CONSTANT * dt;
+
+    e->velocity.x = 0.f;
+    if (g_platform->input.keys_down[KEY_D]) {
+        e->velocity.x = 300.f;
+    }
+    if (g_platform->input.keys_down[KEY_A]) {
+        e->velocity.x = -300.f;
+    }
+
+    if (!e->pressed_jump && g_platform->input.keys_down[KEY_SPACE]) {
+        e->pressed_jump = true;
+        e->velocity.y = 700.f;
+    } 
+
+    // Vertical movement
+    {
+
+        const Vector2 old_position      = e->position.xy;
+        const Vector2 target_position   = v2_add(old_position, v2_mul(v2(0.f, e->velocity.y), v2s(dt)));
+        const Vector2 target_move       = v2_sub(target_position, old_position);
+        const float target_move_len     = v2_len(target_move);
+
+        float distance = 1.f;
+        Vector2 impact_normal = v2z();
+        for (entity_iterator(&g_game_state->entity_manager)) {
+            const Entity* other_e = get_entity_from_iterator(iter);
+            if (other_e->type != ET_Static_Object) continue;
+
+            const Rect other_e_bounds = rect_from_pos(other_e->position.xy, other_e->bounds);
+
+            Rect_Intersect_Result result;
+            if (rect_sweep_rect(old_position, target_position, e->bounds, other_e_bounds, &result)) {
+                const Vector2 actual_move = v2_sub(result.intersection, old_position);
+                const f32 actual_move_len = v2_len(actual_move);
+                
+                const f32 new_distance = actual_move_len / target_move_len;
+                if (new_distance < distance) {
+                    distance = new_distance;
+                    impact_normal = result.normal;
+                } else if (new_distance == distance) {
+                    impact_normal = v2_add(impact_normal, result.normal);
+                }
+            }
+        }
+
+        if (isnan(distance)) { // @CRT
+            distance = 0.f;
+        }
+
+        if (distance != 1.f) {
+            if (impact_normal.x != 0.f) {
+                e->velocity.x = 0.f;
+            }
+            if (impact_normal.y != 0.f) {
+                e->velocity.y = 0.f;
+            }
+
+            e->pressed_jump = false;
+        }
+
+        const Vector2 new_position = v2_add(old_position, v2_mul(target_move, v2s(distance)));
+        e->position.xy = new_position;
+    }
+
+    // Horizontal movement
+    {
+        const Vector2 old_position      = e->position.xy;
+        const Vector2 target_position   = v2_add(old_position, v2_mul(v2(e->velocity.x, 0.f), v2s(dt)));
+        const Vector2 target_move       = v2_sub(target_position, old_position);
+        const float target_move_len     = v2_len(target_move);
+
+        float distance = 1.f;
+        Vector2 impact_normal = v2z();
+        for (entity_iterator(&g_game_state->entity_manager)) {
+            const Entity* other_e = get_entity_from_iterator(iter);
+            if (other_e->type != ET_Static_Object) continue;
+
+            const Rect other_e_bounds = rect_from_pos(other_e->position.xy, other_e->bounds);
+
+            Rect_Intersect_Result result;
+            if (rect_sweep_rect(old_position, target_position, e->bounds, other_e_bounds, &result)) {
+                const Vector2 actual_move = v2_sub(result.intersection, old_position);
+                const f32 actual_move_len = v2_len(actual_move);
+                
+                const f32 new_distance = actual_move_len / target_move_len;
+                if (new_distance < distance) {
+                    distance = new_distance;
+                    impact_normal = result.normal;
+                } else if (new_distance == distance) {
+                    impact_normal = v2_add(impact_normal, result.normal);
+                }
+            }
+        }
+
+        if (isnan(distance)) { // @CRT
+            distance = 0.f;
+        }
+
+        if (distance != 1.f) {
+            if (impact_normal.x != 0.f) {
+                e->velocity.x = 0.f;
+            }
+            if (impact_normal.y != 0.f) {
+                e->velocity.y = 0.f;
+            }
+        }
+
+        const Vector2 new_position = v2_add(old_position, v2_mul(target_move, v2s(distance)));
+        e->position.xy = new_position;
+    }
+
+    g_game_state->target_cam_pos = v2_add(e->position.xy, v2(0.f, 100.f));
 }
 
 static void draw_character(Entity* e) {
@@ -155,17 +292,9 @@ static void draw_character(Entity* e) {
 static void draw_static_object(Entity* e) {
     imm_begin();
     const Rect rect = rect_from_pos(e->position.xy, e->bounds);
-    imm_rect(rect, -5.f, v4(0.f, 0.7f, 0.2f, 1.f));
+    imm_rect(rect, -5.f, v4(e->color.x, e->color.y, e->color.z, 1.f));
     imm_flush();
 }
-
-typedef struct Game_State {
-    Entity_Manager entity_manager;
-
-    b32 is_initialized;
-} Game_State;
-
-static Game_State* g_game_state;
 
 DLL_EXPORT void init_game(Platform* platform) {
     g_platform = platform;
@@ -179,6 +308,12 @@ DLL_EXPORT void init_game(Platform* platform) {
         Entity* const ground = push_entity(em, ET_Static_Object);
         ground->bounds = v2(100000.f, 300.f);
         ground->position.y = -300.f;
+        ground->color = v3(0.f, 0.7f, 0.2f);
+
+        Entity* const box = push_entity(em, ET_Static_Object);
+        box->bounds = v2(200.f, 200.f);
+        box->position.xy = v2(500.f, -50.f);
+        box->color = v3(0.2f, 0.7f, 0.7f);
 
         Entity* const player = push_entity(em, ET_Character);
         player->bounds = v2(100.f, 180.f);
@@ -199,11 +334,16 @@ DLL_EXPORT void tick_game(f32 dt) {
         };
     }
 
+    g_game_state->current_cam_pos = v2_lerp(
+        g_game_state->current_cam_pos, 
+        g_game_state->target_cam_pos,
+        dt * 2.f);
+
     glClear(GL_COLOR_BUFFER_BIT);
     glClearColor(0.1f, 0.1f, 0.1f, 1.f);
 
     const Rect viewport = { v2z(), v2((f32)g_platform->window_width, (f32)g_platform->window_height) };
-    imm_render_ortho(v3z(), viewport.max.width / viewport.max.height, viewport.max.height / 2.f);
+    imm_render_ortho(v3xy(g_game_state->current_cam_pos, 0.f), viewport.max.width / viewport.max.height, viewport.max.height / 2.f);
 
     for (entity_iterator(em)) {
         Entity* const e = get_entity_from_iterator(iter);

@@ -44,6 +44,10 @@ inline f32 v2_cross(Vector2 a, Vector2 b)   { return a.x * b.y - a.y * b.x; }
 inline Vector2 v2_perp(Vector2 a)           { return v2(a.y, -a.x); }
 inline Vector2 v2_negate(Vector2 a)         { return v2(-a.x, -a.y); }
 
+inline Vector2 v2_lerp(Vector2 a, Vector2 b, f32 t) {
+    return v2_add(v2_mul(a, v2s(1.f - t)), v2_mul(b, v2s(t)));
+}
+
 static const Vector2 v2_up     = { 0.f, 1.f };
 static const Vector2 v2_right  = { 1.f, 0.f };
 
