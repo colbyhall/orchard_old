@@ -1,6 +1,165 @@
 #include "draw.h"
 #include "opengl.h"
 
+#define STBRP_STATIC
+#define STB_RECT_PACK_IMPLEMENTATION
+#include <stb/stb_rect_pack.h>
+
+#define STB_IMAGE_STATIC
+#define STB_TRUETYPE_IMPLEMENTATION
+#include <stb/stb_truetype.h>
+
+b32 init_font_collection(u8* data, int len, Allocator asset_memory, Font_Collection* collection) {
+    *collection = (Font_Collection) { 0 };
+    if (!stbtt_InitFont(&collection->info, data, stbtt_GetFontOffsetForIndex(data, 0))) {
+        return false;
+    }
+
+    collection->codepoint_count = collection->info.numGlyphs;
+    collection->codepoint_indices = mem_alloc_array(asset_memory, int, collection->codepoint_count);
+    
+    int glyphs_found = 0;
+    // Ask STBTT for the glyph indices.
+    // @Temporary: linearly search the codepoint space because STBTT doesn't expose CP->glyph idx;
+    //             later we will parse the ttf file in a similar way to STBTT.
+    //             Linear search is exactly 17 times slower than parsing for 65536 glyphs.
+    for (int codepoint = 0; codepoint < 0x110000; ++codepoint) {
+        const int idx = stbtt_FindGlyphIndex(&collection->info, codepoint);
+        if (idx <= 0) continue;
+        glyphs_found += 1;
+        collection->codepoint_indices[idx] = codepoint;
+    }
+
+    // Find the atlas area
+    f32 atlas_area = 0.f;
+    for (int i = 0; i < collection->codepoint_count; ++i) {
+        int x0, x1, y0, y1;
+        stbtt_GetGlyphBox(&collection->info, i, &x0, &y0, &x1, &y1);
+
+        const f32 width  = (f32)(x1 - x0);
+        const f32 height = (f32)(y1 - y0);
+
+        atlas_area += width * height;
+    }
+    collection->atlas_area = atlas_area;
+    collection->asset_memory = asset_memory;
+
+    return true;
+}
+
+Font* font_at_size(Font_Collection* collection, int size) {
+    size = CLAMP(size, 2, 128);
+
+    for (int i = 0; i < collection->num_fonts; ++i) {
+        Font* const f = &collection->fonts[i];
+        if (f->size == size) {
+            return f;
+        }
+    }
+
+    assert(collection->num_fonts + 1 < FONT_CAP);
+
+    int ascent, descent, line_gap;
+    stbtt_GetFontVMetrics(&collection->info, &ascent, &descent, &line_gap);
+
+    Font* const f = &collection->fonts[collection->num_fonts++];
+
+    f->size = size;
+    f->info = &collection->info;
+    f->num_glyphs = collection->codepoint_count;
+
+    const f32 font_scale = stbtt_ScaleForPixelHeight(&collection->info, (f32)size);
+    f->ascent   = (f32)ascent * font_scale;
+    f->descent  = (f32)descent * font_scale;
+    f->line_gap = (f32)line_gap * font_scale;
+
+    int h_oversample = 1;
+    int v_oversample = 1;
+
+    if (size <= 36) {
+        h_oversample = 2;
+        v_oversample = 2;
+    }
+    if (size <= 12) {
+        h_oversample = 4;
+        v_oversample = 4;
+    }
+    if (size <= 8) {
+        h_oversample = 8;
+        v_oversample = 8;
+    }
+
+    Texture2d* const atlas = &f->atlas;
+    atlas->depth = 1;
+
+    // @Cleanup @Cleanup @Cleanup
+    if (size <= 12) {
+        atlas->width  = 512 * h_oversample;
+        atlas->height = 512 * v_oversample;
+    } else {
+        f32 area = collection->atlas_area * h_oversample * v_oversample;
+        area *= 1.f + 1.f / sqrtf((f32)size); // fudge factor for small sizes
+        area *= font_scale * font_scale;
+
+        const f32 root = sqrtf(area);
+
+        u32 atlas_dimension = (u32)root;
+        atlas_dimension = (atlas_dimension + 127) & ~127;
+
+        atlas->width  = atlas_dimension;
+        atlas->height = atlas_dimension;
+    }
+
+    atlas->pixels = mem_alloc_array(collection->asset_memory, u8, atlas->width * atlas->height); // @Leak
+
+    stbtt_pack_context pc;
+    stbtt_packedchar* const pdata = mem_alloc_array(collection->asset_memory, stbtt_packedchar, collection->codepoint_count); // @Leak
+
+    stbtt_pack_range pr;
+    stbtt_PackBegin(&pc, atlas->pixels, atlas->width, atlas->height, 0, 1, 0);
+    pr.chardata_for_range               = pdata;
+    pr.array_of_unicode_codepoints      = collection->codepoint_indices;
+    pr.first_unicode_codepoint_in_range = 0;
+    pr.num_chars                        = collection->codepoint_count;
+    pr.font_size                        = (f32)size;
+
+    stbtt_PackSetSkipMissingCodepoints(&pc, 1);
+    stbtt_PackSetOversampling(&pc, h_oversample, v_oversample);
+    stbtt_PackFontRanges(&pc, collection->info.data, 0, &pr, 1);
+    stbtt_PackEnd(&pc);
+
+    const b32 ok = upload_texture2d(atlas);
+    if (!ok) assert(false);
+
+    f->glyphs = mem_alloc_array(collection->asset_memory, Font_Glyph, collection->codepoint_count);
+    for (int i = 0; i < collection->codepoint_count; ++i) {
+        Font_Glyph* const g = f->glyphs + i;
+
+        g->uv0 = v2((f32)pdata[i].x0 / (f32)atlas->width, (f32)pdata[i].y1 / (f32)atlas->width);
+        g->uv1 = v2((f32)pdata[i].x1 / (f32)atlas->width, (f32)pdata[i].y0 / (f32)atlas->width);
+
+        g->width     = ((f32)pdata[i].x1 - pdata[i].x0) / (f32)h_oversample;
+        g->height    = ((f32)pdata[i].y1 - pdata[i].y0) / (f32)v_oversample;
+        g->bearing_x = pdata[i].xoff;
+        g->bearing_y = pdata[i].yoff;
+        g->advance   = pdata[i].xadvance;
+    }
+
+    return f;
+}
+
+Font_Glyph* glyph_from_rune(Font* f, Rune r) {
+    const int index = stbtt_FindGlyphIndex(f->info, r);
+    if (index > 0) {
+        assert(index < f->num_glyphs);
+        return &f->glyphs[index];
+    }
+
+    return 0;
+}
+
+Font_Collection* g_font_collection = 0;
+
 typedef struct Immediate_Vertex {
     Vector3 position;
     Vector3 normal;
@@ -30,6 +189,7 @@ static Framebuffer* g_back_buffer;
 Shader* g_solid_shape_shader = 0;
 Shader* g_solid_shape_geometry_shader = 0;
 Shader* g_solid_shape_lighting_shader = 0;
+Shader* g_font_shader = 0;
 
 #define FAR_CLIP_PLANE 1000.f
 #define NEAR_CLIP_PLANE 0.1
@@ -133,12 +293,43 @@ void main() {\n\
 }\n\
 #endif\n";
 
+const char* font_shader_source = 
+"#ifdef VERTEX\n\
+layout(location = 0) in vec3 position;\n\
+layout(location = 1) in vec3 normal;\n\
+layout(location = 2) in vec2 uv;\n\
+layout(location = 3) in vec4 color;\n\
+uniform mat4 projection;\n\
+uniform mat4 view;\n\
+out vec4 frag_color;\n\
+out vec2 frag_uv;\n\
+void main() {\n\
+    gl_Position =  projection * view * vec4(position, 1.0);\n\
+    frag_color = color;\n\
+    frag_uv = uv;\n\
+}\n\
+#endif\n\
+#ifdef FRAGMENT\n\
+out vec4 final_color;\n\
+in vec4 frag_color;\n\
+in vec2 frag_uv;\n\
+\n\
+uniform sampler2D atlas;\n\
+\n\
+void main() {\n\
+    vec4 sample = texture(atlas, frag_uv);\n\
+    final_color = vec4(frag_color.xyz, sample.r);\n\
+}\n\
+#endif\n";
+
 void init_draw(Allocator allocator) {
     g_imm_renderer      = mem_alloc_struct(allocator, Immediate_Renderer);
     g_solid_shape_shader  = mem_alloc_struct(allocator, Shader);
     g_solid_shape_geometry_shader = mem_alloc_struct(allocator, Shader);
     g_solid_shape_lighting_shader = mem_alloc_struct(allocator, Shader);
-    g_back_buffer       = mem_alloc_struct(allocator, Framebuffer);
+    g_font_shader = mem_alloc_struct(allocator, Shader);
+    g_back_buffer = mem_alloc_struct(allocator, Framebuffer);
+    g_font_collection = mem_alloc_struct(allocator, Font_Collection);
 
     if (g_imm_renderer->is_initialized) return;
 
@@ -177,9 +368,18 @@ void init_draw(Allocator allocator) {
     g_solid_shape_lighting_shader->source_len = (int)str_len(solid_shape_lighting_shader_source);
     if (!init_shader(g_solid_shape_lighting_shader)) assert(false);
 
+    g_font_shader->source = (GLchar*)font_shader_source;
+    g_font_shader->source_len = (int)str_len(font_shader_source);
+    if (!init_shader(g_font_shader)) assert(false);
+
     set_shader(g_solid_shape_shader);
 
     if (!init_framebuffer(BACK_BUFFER_WIDTH, BACK_BUFFER_HEIGHT, FF_GBuffer, g_back_buffer)) assert(false);
+
+    String font_file;
+    if (!read_file_into_string("assets\\fonts\\consola.ttf", &font_file, allocator)) assert(false);
+
+    if (!init_font_collection(EXPAND_STRING(font_file), allocator, g_font_collection)) assert(false);
 }
 
 void imm_refresh_transform(void) {
@@ -206,6 +406,10 @@ void imm_render_ortho(Vector3 pos, f32 aspect_ratio, f32 ortho_size) {
 }
 
 void imm_render_from(Vector3 pos) {
+    pos.x = roundf(pos.x);
+    pos.y = roundf(pos.y);
+    pos.z = roundf(pos.z);
+
     const f32 ortho_size    = (f32)BACK_BUFFER_HEIGHT / 2.f;
     const f32 aspect_ratio = (f32)BACK_BUFFER_WIDTH / (f32)BACK_BUFFER_HEIGHT;
     g_imm_renderer->projection = m4_ortho(ortho_size, aspect_ratio, FAR_CLIP_PLANE, NEAR_CLIP_PLANE);
@@ -415,4 +619,56 @@ void imm_arrow(Vector2 a1, Vector2 a2, f32 z, f32 thickness, Vector4 color) {
     imm_line(a2, l2, z, thickness, color);
     imm_line(a2, r2, z, thickness, color);
     imm_line(a1, a2, z, thickness, color);
+}
+
+void imm_glyph(Font_Glyph* g, Font* font, Vector2 xy, f32 z, Vector4 color) {
+    // Draw font from bottom up. Yes this makes doing paragraphs harder but it goes along with OpenGL's coordinate system
+    xy = v2_sub(xy, v2(0.f, font->descent));
+    const f32 x0 = xy.x + g->bearing_x;
+    const f32 y1 = xy.y - g->bearing_y;
+    const f32 x1 = x0 + g->width;
+    const f32 y0 = y1 - g->height;
+    const Rect rect = rect_from_raw(x0, y0, x1, y1);
+
+    imm_textured_rect(rect, z, g->uv0, g->uv1, color);
+}
+
+Font_Glyph* imm_rune(Rune r, Font* font, Vector2 xy, f32 z, Vector4 color) {
+    Font_Glyph* const g = glyph_from_rune(font, r);
+    if (g != 0) {
+        imm_glyph(g, font, xy, z, color);
+        return g;
+    }
+
+    return 0;
+}
+
+void imm_string(String str, Font* font, f32 max_width, Vector2 xy, f32 z, Vector4 color) {
+    const Vector2 orig_xy = xy;
+
+    Font_Glyph* const space_g = glyph_from_rune(font, ' ');
+    for (int i = 0; i < str.len; ++i) {
+        if (xy.x + space_g->advance > orig_xy.x + max_width) {
+            xy.x = orig_xy.x;
+            xy.y -= (f32)font->size;
+        }
+
+        const char c = str.data[i]; // @TODO(colby): UTF8
+        switch (c) {
+        case '\n': {
+            xy.x = orig_xy.x;
+            xy.y -= (f32)font->size;
+        } break;
+        case '\r': {
+            xy.x = orig_xy.x;
+        } break;
+        case '\t': {
+            xy.x += space_g->advance * 4.f;
+        } break;
+        default: {
+            Font_Glyph* const g = imm_rune(c, font, xy, z, color);
+            xy.x += g->advance;
+        } break;
+        }
+    }
 }

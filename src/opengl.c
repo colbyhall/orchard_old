@@ -12,6 +12,58 @@ GL_BINDINGS(DEFINE_GL_FUNCTIONS)
 
 OpenGL_Context* g_gl_context = 0;
 
+b32 upload_texture2d(Texture2d* t) {
+    GLint format = 0;
+    switch (t->depth) {
+    case 1:
+        format = GL_RED;
+        break;
+    case 3:
+        format = GL_RGB;
+        break;
+    case 4:
+        format = GL_RGBA;
+        break;
+    default:
+        invalid_code_path;
+        break;
+    }
+
+    if (t->id == 0) {
+        glGenTextures(1, &t->id);
+        glBindTexture(GL_TEXTURE_2D, t->id);
+
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+        glTexImage2D(
+            GL_TEXTURE_2D, 
+            0, 
+            format, 
+            t->width, 
+            t->height, 
+            0, 
+            format, 
+            GL_UNSIGNED_BYTE, 
+            t->pixels
+        );
+    } else {
+        glBindTexture(GL_TEXTURE_2D, t->id);
+
+        glTexSubImage2D(
+            GL_TEXTURE_2D, 
+            0, 0, 0, 
+            t->width, 
+            t->height, 
+            format, 
+            GL_UNSIGNED_BYTE, 
+            t->pixels
+        );
+    }
+
+    return true;
+}
+
 b32 init_shader(Shader* shader) {
     const GLuint program_id = glCreateProgram();
 

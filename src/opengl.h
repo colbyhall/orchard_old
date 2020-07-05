@@ -241,6 +241,8 @@ typedef struct Texture2d {
     GLuint id;
 } Texture2d;
 
+b32 upload_texture2d(Texture2d* t);
+
 #define SHADER_UNFORM_NAME_CAP 48
 typedef struct Shader_Uniform {
     GLchar name[SHADER_UNFORM_NAME_CAP];

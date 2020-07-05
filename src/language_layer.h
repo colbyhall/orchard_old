@@ -176,6 +176,7 @@ inline void* mem_alloc(Allocator allocator, usize size) {
 }
 
 #define mem_alloc_struct(allocator, type) mem_alloc(allocator, sizeof(type))
+#define mem_alloc_array(allocator, type, count) mem_alloc(allocator, sizeof(type) * count)
 
 inline void mem_free(Allocator allocator, void* ptr) {
     allocator.proc(allocator, ptr, 0, 0);

@@ -285,7 +285,7 @@ static void tick_character(Entity* e, f32 dt) {
 
 static void draw_character(Entity* e) {
     imm_begin();
-    const Rect rect = rect_from_pos(e->position.xy, e->bounds);
+    const Rect rect = rect_from_pos(v2_round(e->position.xy), e->bounds);
     imm_rect(rect, -5.f, v4(1.f, 0.f, 0.2f, 1.f));
     imm_flush();
 }
@@ -349,13 +349,27 @@ DLL_EXPORT void tick_game(f32 dt) {
             Entity* const e = get_entity_from_iterator(iter);
 
             switch (e->type) {
-    #define DRAW_ENTITIES(t, f) case t: f(e); break;
+#define DRAW_ENTITIES(t, f) case t: f(e); break;
                 ENTITY_DRAW(DRAW_ENTITIES);
-    #undef DRAW_ENTITIES
+#undef DRAW_ENTITIES
             };
         }
     }
     end_draw();
+
+    // Draw UI
+    {
+        set_shader(g_font_shader);
+        const Rect viewport = { v2z(), v2((f32)g_platform->window_width, (f32)g_platform->window_height) };
+        imm_render_right_handed(viewport);
+
+        Font* const the_font = font_at_size(g_font_collection, 32);
+        set_uniform_texture("atlas", the_font->atlas);
+
+        imm_begin();
+        imm_string(FROM_LITERAL("Hello World!"), the_font, 1000.f, v2z(), -5.f, v4(1.f, 1.f, 1.f, 1.f));
+        imm_flush();
+    }
 
     swap_gl_buffers(g_platform);
 }
