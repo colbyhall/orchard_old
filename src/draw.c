@@ -23,15 +23,88 @@ typedef struct Immediate_Renderer {
 } Immediate_Renderer;
 static Immediate_Renderer* g_imm_renderer = 0;
 
-Shader* solid_shape_shader = 0;
+static Framebuffer* g_back_buffer;
+#define BACK_BUFFER_WIDTH   512
+#define BACK_BUFFER_HEIGHT  288
+
+Shader* g_solid_shape_shader = 0;
+Shader* g_solid_shape_geometry_shader = 0;
+Shader* g_solid_shape_lighting_shader = 0;
 
 #define FAR_CLIP_PLANE 1000.f
 #define NEAR_CLIP_PLANE 0.1
 
+const char* solid_shape_geometry_shader_source = 
+"#ifdef VERTEX\n\
+layout(location = 0) in vec3 position;\n\
+layout(location = 1) in vec3 normal;\n\
+layout(location = 2) in vec2 uv;\n\
+layout(location = 3) in vec4 color;\n\
+uniform mat4 projection;\n\
+uniform mat4 view;\n\
+out vec4 frag_color;\n\
+out vec3 frag_normal;\n\
+out vec3 frag_position;\n\
+out vec2 frag_uv;\n\
+void main() {\n\
+    gl_Position =  projection * view * vec4(position, 1.0);\n\
+    frag_color = color;\n\
+    frag_normal = normal;\n\
+    frag_position = gl_Position.xyz;\n\
+    frag_uv = uv;\n\
+}\n\
+#endif\n\
+#ifdef FRAGMENT\n\
+layout (location = 0) out vec4 diffuse;\n\
+layout (location = 1) out vec3 normal;\n\
+layout (location = 2) out vec3 position;\n\
+in vec4 frag_color;\n\
+in vec3 frag_normal;\n\
+in vec3 frag_position;\n\
+in vec2 frag_uv;\n\
+\n\
+uniform sampler2D diffuse_tex;\n\
+\n\
+void main() {\n\
+    if (frag_uv.x < 0.0) {\n\
+        diffuse = frag_color;\n\
+    } else {\n\
+        diffuse = texture(diffuse_tex, frag_uv);\n\
+    }\n\
+    normal = frag_normal;\n\
+    position = frag_position;\n\
+}\n\
+#endif\n";
+
+const char* solid_shape_lighting_shader_source = 
+"#ifdef VERTEX\n\
+layout(location = 0) in vec3 position;\n\
+layout(location = 1) in vec3 normal;\n\
+layout(location = 2) in vec2 uv;\n\
+layout(location = 3) in vec4 color;\n\
+uniform mat4 projection;\n\
+uniform mat4 view;\n\
+out vec2 frag_uv;\n\
+void main() {\n\
+    gl_Position =  projection * view * vec4(position, 1.0);\n\
+    frag_uv = uv;\n\
+}\n\
+#endif\n\
+#ifdef FRAGMENT\n\
+out vec4 frag_color;\n\
+in vec2 frag_uv;\n\
+\n\
+uniform sampler2D diffuse_tex;\n\
+\n\
+void main() {\n\
+    frag_color = texture(diffuse_tex, frag_uv);\n\
+}\n\
+#endif\n";
+
 const char* solid_shape_shader_source = 
 "#ifdef VERTEX\n\
 layout(location = 0) in vec3 position;\n\
-layout(location = 1) in vec2 normal;\n\
+layout(location = 1) in vec3 normal;\n\
 layout(location = 2) in vec2 uv;\n\
 layout(location = 3) in vec4 color;\n\
 uniform mat4 projection;\n\
@@ -61,8 +134,11 @@ void main() {\n\
 #endif\n";
 
 void init_draw(Allocator allocator) {
-    g_imm_renderer = mem_alloc_struct(allocator, Immediate_Renderer);
-    solid_shape_shader = mem_alloc_struct(allocator, Shader);
+    g_imm_renderer      = mem_alloc_struct(allocator, Immediate_Renderer);
+    g_solid_shape_shader  = mem_alloc_struct(allocator, Shader);
+    g_solid_shape_geometry_shader = mem_alloc_struct(allocator, Shader);
+    g_solid_shape_lighting_shader = mem_alloc_struct(allocator, Shader);
+    g_back_buffer       = mem_alloc_struct(allocator, Framebuffer);
 
     if (g_imm_renderer->is_initialized) return;
 
@@ -74,6 +150,7 @@ void init_draw(Allocator allocator) {
 
     glBindVertexArray(0);
 
+    glEnable(GL_FRAMEBUFFER_SRGB); 
     glDepthMask(GL_TRUE);
     glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
     glDepthFunc(GL_LEQUAL);
@@ -88,11 +165,21 @@ void init_draw(Allocator allocator) {
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     g_imm_renderer->is_initialized = true;
 
-    solid_shape_shader->source = (GLchar*)solid_shape_shader_source;
-    solid_shape_shader->source_len = (int)str_len(solid_shape_shader_source);
-    if (!init_shader(solid_shape_shader)) assert(false);
+    g_solid_shape_shader->source = (GLchar*)solid_shape_shader_source;
+    g_solid_shape_shader->source_len = (int)str_len(solid_shape_shader_source);
+    if (!init_shader(g_solid_shape_shader)) assert(false);
 
-    set_shader(solid_shape_shader);
+    g_solid_shape_geometry_shader->source = (GLchar*)solid_shape_geometry_shader_source;
+    g_solid_shape_geometry_shader->source_len = (int)str_len(solid_shape_geometry_shader_source);
+    if (!init_shader(g_solid_shape_geometry_shader)) assert(false);
+
+    g_solid_shape_lighting_shader->source = (GLchar*)solid_shape_lighting_shader_source;
+    g_solid_shape_lighting_shader->source_len = (int)str_len(solid_shape_lighting_shader_source);
+    if (!init_shader(g_solid_shape_lighting_shader)) assert(false);
+
+    set_shader(g_solid_shape_shader);
+
+    if (!init_framebuffer(BACK_BUFFER_WIDTH, BACK_BUFFER_HEIGHT, FF_GBuffer, g_back_buffer)) assert(false);
 }
 
 void imm_refresh_transform(void) {
@@ -114,6 +201,15 @@ void imm_render_right_handed(Rect viewport) {
 void imm_render_ortho(Vector3 pos, f32 aspect_ratio, f32 ortho_size) {
     g_imm_renderer->projection = m4_ortho(ortho_size, aspect_ratio, FAR_CLIP_PLANE, NEAR_CLIP_PLANE);
     g_imm_renderer->view = m4_translate(v3_negate(pos));
+
+    imm_refresh_transform();
+}
+
+void imm_render_from(Vector3 pos) {
+    const f32 ortho_size    = (f32)BACK_BUFFER_HEIGHT / 2.f;
+    const f32 aspect_ratio = (f32)BACK_BUFFER_WIDTH / (f32)BACK_BUFFER_HEIGHT;
+    g_imm_renderer->projection = m4_ortho(ortho_size, aspect_ratio, FAR_CLIP_PLANE, NEAR_CLIP_PLANE);
+    g_imm_renderer->view = m4_translate(v3_negate(pos));    
 
     imm_refresh_transform();
 }
@@ -162,6 +258,46 @@ void imm_flush(void) {
     glDisableVertexAttribArray(color_loc);
 
     glBindVertexArray(0);
+}
+
+void begin_draw(void) {
+    begin_framebuffer(*g_back_buffer);
+    clear_framebuffer(v3s(0.05f));
+    set_shader(g_solid_shape_geometry_shader);
+}
+
+void end_draw(void) {
+    end_framebuffer();
+
+    clear_framebuffer(v3s(0.f));
+    glViewport(0, 0, g_platform->window_width, g_platform->window_height);
+
+    set_shader(g_solid_shape_lighting_shader);
+    set_uniform_texture("diffuse_tex", g_back_buffer->color[FCI_Diffuse]);
+
+    const Rect viewport = { v2z(), v2((f32)g_platform->window_width, (f32)g_platform->window_height) };
+    const f32 viewport_aspect_ratio = viewport.max.width / viewport.max.height;
+    const f32 back_buffer_aspect_ratio = (f32)BACK_BUFFER_WIDTH / (f32)BACK_BUFFER_HEIGHT;
+
+    imm_render_ortho(v3z(), viewport_aspect_ratio, viewport.max.height / 2.f);
+
+    Rect draw_rect;
+    if (viewport_aspect_ratio >= back_buffer_aspect_ratio) {
+        draw_rect = rect_from_pos(v2z(), v2(
+            viewport.max.height * back_buffer_aspect_ratio, 
+            viewport.max.height
+        ));
+    } else {
+        const f32 ratio = (f32)BACK_BUFFER_HEIGHT / (f32)BACK_BUFFER_WIDTH;
+        draw_rect = rect_from_pos(v2z(), v2(
+            viewport.max.width, 
+            viewport.max.width * ratio
+        ));
+    }
+
+    imm_begin();
+    imm_textured_rect(draw_rect, -5.f, v2z(), v2s(1.f), v4(1.f, 1.f, 1.f, 1.f));
+    imm_flush();
 }
 
 void imm_vertex(Vector3 position, Vector3 normal, Vector2 uv, Vector4 color) {

@@ -1,6 +1,8 @@
 #ifndef OPENGL_H
 #define OPENGL_H
 
+#include "platform.h"
+
 // The goal is to eventually have a simple wrapper api around all graphics api's. After that we 
 // have that we can have seperate builds for certain graphics api's. In doing that we will want
 // all opengl methods to eventually be just in the implementation file instead of the header
@@ -263,10 +265,42 @@ b32 init_shader(Shader* shader);
 b32 free_shader(Shader* shader);
 
 b32 set_uniform_m4(const char* name, Matrix4 m);
-b32 set_uniform_texture(const char* name, Texture2d* t);
+b32 set_uniform_texture(const char* name, Texture2d t);
 
 void set_shader(Shader* s);
 Shader* get_bound_shader(void);
+
+enum Framebuffer_Flags {
+    FF_Diffuse     = (1 << 0),
+    FF_Position    = (1 << 1),
+    FF_Normal      = (1 << 2),
+    FF_Depth       = (1 << 3),
+
+    FF_GBuffer     = (FF_Diffuse | FF_Position | FF_Normal | FF_Depth),
+};
+
+enum Framebuffer_Colors_Index {
+    FCI_Diffuse = 0,
+    FCI_Normal,
+    FCI_Position,
+    FCI_Count,
+};
+
+typedef struct Framebuffer {
+    GLuint handle;
+    Texture2d color[FCI_Count];
+    Texture2d depth;
+    int width, height;
+    int flags;
+} Framebuffer;
+
+b32 init_framebuffer(int width, int height, int flags, Framebuffer* framebuffer);
+b32 free_framebuffer(Framebuffer* framebuffer);
+b32 resize_framebuffer(Framebuffer* framebuffer, int width, int height);
+
+void begin_framebuffer(Framebuffer framebuffer);
+void end_framebuffer(void);
+void clear_framebuffer(Vector3 color);
 
 typedef struct OpenGL_Context {
     GLint maj_version, min_version;

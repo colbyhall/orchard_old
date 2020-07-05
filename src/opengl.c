@@ -139,12 +139,12 @@ b32 set_uniform_m4(const char* name, Matrix4 m) {
     return true;
 }
 
-b32 set_uniform_texture(const char* name, Texture2d* t) {
+b32 set_uniform_texture(const char* name, Texture2d t) {
     Shader_Uniform* const var = find_uniform(name, GL_SAMPLER_2D);
     if (!var) return false; 
 
     glActiveTexture(GL_TEXTURE0 + var->location);
-    glBindTexture(GL_TEXTURE_2D, t->id);
+    glBindTexture(GL_TEXTURE_2D, t.id);
 
     glUniform1i(var->location, var->location);
     return true;
@@ -162,4 +162,107 @@ void set_shader(Shader* s) {
 
 Shader* get_bound_shader(void) {
     return g_gl_context->bound_shader;
+}
+
+b32 init_framebuffer(int width, int height, int flags, Framebuffer* framebuffer) {
+    GLuint handle;
+    glGenFramebuffers(1, &handle);
+    glBindFramebuffer(GL_FRAMEBUFFER, handle);
+
+    Framebuffer result = { 
+        .handle = handle,
+        .width  = width,
+        .height = height,
+        .flags  = flags,
+    };
+
+    if ((flags & FF_Diffuse) != 0) {
+        GLuint diffuse_texture;
+        glGenTextures(1, &diffuse_texture);
+        glBindTexture(GL_TEXTURE_2D, diffuse_texture);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + FCI_Diffuse, GL_TEXTURE_2D, diffuse_texture, 0);
+        result.color[FCI_Diffuse] = (Texture2d) { 0, width, height, 4, diffuse_texture };
+    }
+
+    if ((flags & FF_Normal) != 0) {
+        GLuint normal_texture;
+        glGenTextures(1, &normal_texture);
+        glBindTexture(GL_TEXTURE_2D, normal_texture);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, width, height, 0, GL_RGBA, GL_FLOAT, 0);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + FCI_Normal, GL_TEXTURE_2D, normal_texture, 0);
+        result.color[FCI_Normal] = (Texture2d) { 0, width, height, 4, normal_texture };
+    }
+
+    if ((flags & FF_Position) != 0) {
+        GLuint position_texture;
+        glGenTextures(1, &position_texture);
+        glBindTexture(GL_TEXTURE_2D, position_texture);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, width, height, 0, GL_RGBA, GL_FLOAT, 0);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + FCI_Position, GL_TEXTURE_2D, position_texture, 0);
+        result.color[FCI_Position] = (Texture2d) { 0, width, height, 4, position_texture };
+    }
+
+    if ((flags & FF_Depth) != 0) {
+        GLuint depth_texture;
+        glGenTextures(1, &depth_texture);
+        glBindTexture(GL_TEXTURE_2D, depth_texture);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT16, width, height, 0, GL_DEPTH_COMPONENT, GL_UNSIGNED_SHORT, 0);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_R_TO_TEXTURE);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, depth_texture, 0);
+        result.depth = (Texture2d) { 0, width, height, 1, depth_texture };
+    }
+
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+        // @TODO(colby): do cleanup
+        return false;
+    }
+
+    *framebuffer = result;
+
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    return true;
+}
+
+b32 free_framebuffer(Framebuffer* framebuffer) {
+    return false; // @TODO
+}
+
+b32 resize_framebuffer(Framebuffer* framebuffer, int width, int height) {
+    return false;
+}
+
+void begin_framebuffer(Framebuffer framebuffer) {
+    glBindFramebuffer(GL_FRAMEBUFFER, framebuffer.handle);
+
+    GLuint attachments[FCI_Count] = { 0 };
+    int num_attachments = 0;
+    
+    const int flags = framebuffer.flags;
+    if ((flags & FF_Diffuse) != 0)  attachments[num_attachments++] = GL_COLOR_ATTACHMENT0 + FCI_Diffuse;
+    if ((flags & FF_Normal) != 0)   attachments[num_attachments++] = GL_COLOR_ATTACHMENT0 + FCI_Normal;
+    if ((flags & FF_Position) != 0) attachments[num_attachments++] = GL_COLOR_ATTACHMENT0 + FCI_Position;
+
+    glDrawBuffers(num_attachments, attachments);
+    glViewport(0, 0, framebuffer.width, framebuffer.height);
+}
+
+void end_framebuffer(void) {
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
+void clear_framebuffer(Vector3 color) {
+    glClearColor(color.r, color.g, color.b, 1.f);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 }

@@ -5,9 +5,13 @@
 
 void init_draw(Allocator allocator);
 
+void begin_draw(void);
+void end_draw(void);
+
 void imm_refresh_transform(void);
 void imm_render_right_handed(Rect viewport);
 void imm_render_ortho(Vector3 pos, f32 aspect_ratio, f32 ortho_size);
+void imm_render_from(Vector3 pos); // This is the one that uses the g_back_buffer
 
 void imm_begin(void);
 void imm_flush(void);

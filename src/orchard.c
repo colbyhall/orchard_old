@@ -153,7 +153,8 @@ macro(ET_Character, tick_character)
 macro(ET_Character, draw_character) \
 macro(ET_Static_Object, draw_static_object)
 
-#define GRAVITY_CONSTANT -980.f
+#define METER 32.f
+#define GRAVITY_CONSTANT (-9.8f * METER)
 
 typedef struct Game_State {
     Entity_Manager entity_manager;
@@ -171,15 +172,15 @@ static void tick_character(Entity* e, f32 dt) {
 
     e->velocity.x = 0.f;
     if (g_platform->input.keys_down[KEY_D]) {
-        e->velocity.x = 300.f;
+        e->velocity.x = 6.f * METER;
     }
     if (g_platform->input.keys_down[KEY_A]) {
-        e->velocity.x = -300.f;
+        e->velocity.x = -6.f * METER;
     }
 
     if (!e->pressed_jump && g_platform->input.keys_down[KEY_SPACE]) {
         e->pressed_jump = true;
-        e->velocity.y = 700.f;
+        e->velocity.y = 200.f;
     } 
 
     // Vertical movement
@@ -279,7 +280,7 @@ static void tick_character(Entity* e, f32 dt) {
         e->position.xy = new_position;
     }
 
-    g_game_state->target_cam_pos = v2_add(e->position.xy, v2(0.f, 100.f));
+    g_game_state->target_cam_pos = v2_add(e->position.xy, v2(0.f, METER));
 }
 
 static void draw_character(Entity* e) {
@@ -306,17 +307,17 @@ DLL_EXPORT void init_game(Platform* platform) {
         Entity_Manager* const em = &g_game_state->entity_manager;
         
         Entity* const ground = push_entity(em, ET_Static_Object);
-        ground->bounds = v2(100000.f, 300.f);
-        ground->position.y = -300.f;
+        ground->bounds = v2(100000.f, METER);
+        ground->position.y = -8.f * METER;
         ground->color = v3(0.f, 0.7f, 0.2f);
 
         Entity* const box = push_entity(em, ET_Static_Object);
-        box->bounds = v2(200.f, 200.f);
-        box->position.xy = v2(500.f, -50.f);
+        box->bounds = v2s(METER);
+        box->position.xy = v2(5.f * METER, -8.f * METER + METER);
         box->color = v3(0.2f, 0.7f, 0.7f);
 
         Entity* const player = push_entity(em, ET_Character);
-        player->bounds = v2(100.f, 180.f);
+        player->bounds = v2(METER, 2 * METER);
 
         g_game_state->is_initialized = true;
     }
@@ -337,23 +338,24 @@ DLL_EXPORT void tick_game(f32 dt) {
     g_game_state->current_cam_pos = v2_lerp(
         g_game_state->current_cam_pos, 
         g_game_state->target_cam_pos,
-        dt * 2.f);
+        dt * 2.f
+    );
 
-    glClear(GL_COLOR_BUFFER_BIT);
-    glClearColor(0.1f, 0.1f, 0.1f, 1.f);
+    begin_draw();
+    {
+        imm_render_from(v3xy(g_game_state->current_cam_pos, 0.f));
 
-    const Rect viewport = { v2z(), v2((f32)g_platform->window_width, (f32)g_platform->window_height) };
-    imm_render_ortho(v3xy(g_game_state->current_cam_pos, 0.f), viewport.max.width / viewport.max.height, viewport.max.height / 2.f);
+        for (entity_iterator(em)) {
+            Entity* const e = get_entity_from_iterator(iter);
 
-    for (entity_iterator(em)) {
-        Entity* const e = get_entity_from_iterator(iter);
-
-        switch (e->type) {
-#define DRAW_ENTITIES(t, f) case t: f(e); break;
-            ENTITY_DRAW(DRAW_ENTITIES);
-#undef DRAW_ENTITIES
-        };
+            switch (e->type) {
+    #define DRAW_ENTITIES(t, f) case t: f(e); break;
+                ENTITY_DRAW(DRAW_ENTITIES);
+    #undef DRAW_ENTITIES
+            };
+        }
     }
+    end_draw();
 
     swap_gl_buffers(g_platform);
 }
