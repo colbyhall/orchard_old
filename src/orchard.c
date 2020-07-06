@@ -22,6 +22,9 @@
 #include "opengl.c"
 #include "draw.c"
 
+#define STB_IMAGE_IMPLEMENTATION
+#include <stb/stb_image.h>
+
 Platform* g_platform = 0;
 
 typedef int Entity_Id;
@@ -49,6 +52,7 @@ typedef struct Entity {
         struct {
             Vector2 velocity;
             b32 pressed_jump;
+            b32 flipped;
         };
         // ET_Static_Object
         struct {
@@ -173,10 +177,13 @@ static void tick_character(Entity* e, f32 dt) {
     e->velocity.x = 0.f;
     if (g_platform->input.keys_down[KEY_D]) {
         e->velocity.x = 6.f * METER;
+        e->flipped = false;
     }
     if (g_platform->input.keys_down[KEY_A]) {
         e->velocity.x = -6.f * METER;
+        e->flipped = true;
     }
+
 
     if (!e->pressed_jump && g_platform->input.keys_down[KEY_SPACE]) {
         e->pressed_jump = true;
@@ -283,10 +290,15 @@ static void tick_character(Entity* e, f32 dt) {
     g_game_state->target_cam_pos = v2_add(e->position.xy, v2(0.f, METER));
 }
 
+static Texture2d* g_character_texture;
+
 static void draw_character(Entity* e) {
-    imm_begin();
     const Rect rect = rect_from_pos(v2_round(e->position.xy), e->bounds);
-    imm_rect(rect, -5.f, v4(1.f, 0.f, 0.2f, 1.f));
+    set_uniform_texture("diffuse_tex", *g_character_texture);
+    imm_begin();
+
+    if (e->flipped) imm_textured_rect(rect, -5.f, v2(1.f, 0.f), v2(0.f, 1.f), v4s(1.f));
+    else imm_textured_rect(rect, -5.f, v2z(), v2s(1.f), v4s(1.f));
     imm_flush();
 }
 
@@ -303,6 +315,7 @@ DLL_EXPORT void init_game(Platform* platform) {
     init_opengl(platform);
     init_draw(platform->permanent_arena);
     g_game_state = mem_alloc_struct(platform->permanent_arena, Game_State);
+    g_character_texture = mem_alloc_struct(platform->permanent_arena, Texture2d);
     if (!g_game_state->is_initialized) {
         Entity_Manager* const em = &g_game_state->entity_manager;
         
@@ -318,6 +331,21 @@ DLL_EXPORT void init_game(Platform* platform) {
 
         Entity* const player = push_entity(em, ET_Character);
         player->bounds = v2(METER, 2 * METER);
+
+        String character_sprite_source;
+        if (!read_file_into_string("assets\\sprites\\test_character.png", &character_sprite_source, platform->permanent_arena)) assert(false);
+
+        stbi_set_flip_vertically_on_load(true);
+
+        g_character_texture->is_srgb = true;
+        g_character_texture->pixels = stbi_load_from_memory(
+            EXPAND_STRING(character_sprite_source), 
+            &g_character_texture->width,
+            &g_character_texture->height,
+            &g_character_texture->depth,
+            0
+        );
+        upload_texture2d(g_character_texture);
 
         g_game_state->is_initialized = true;
     }
@@ -363,7 +391,7 @@ DLL_EXPORT void tick_game(f32 dt) {
         const Rect viewport = { v2z(), v2((f32)g_platform->window_width, (f32)g_platform->window_height) };
         imm_render_right_handed(viewport);
 
-        Font* const the_font = font_at_size(g_font_collection, 32);
+        Font* const the_font = font_at_size(g_font_collection, (int)(32.f * g_platform->dpi_scale));
         set_uniform_texture("atlas", the_font->atlas);
 
         imm_begin();

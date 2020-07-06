@@ -237,6 +237,7 @@ void swap_gl_buffers(Platform* platform);
 typedef struct Texture2d {
     u8* pixels;
     int width, height, depth;
+    b32 is_srgb;
 
     GLuint id;
 } Texture2d;

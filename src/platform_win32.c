@@ -204,6 +204,22 @@ static LRESULT the_window_proc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam
     return DefWindowProcA(hWnd, Msg, wParam, lParam);
 }
 
+typedef enum PROCESS_DPI_AWARENESS {
+    PROCESS_DPI_UNAWARE,
+    PROCESS_SYSTEM_DPI_AWARE,
+    PROCESS_PER_MONITOR_DPI_AWARE
+} PROCESS_DPI_AWARENESS;
+
+typedef enum MONITOR_DPI_TYPE {
+  MDT_EFFECTIVE_DPI,
+  MDT_ANGULAR_DPI,
+  MDT_RAW_DPI,
+  MDT_DEFAULT
+} MONITOR_DPI_TYPE;
+
+typedef HRESULT (*Set_Process_DPI_Awareness)(PROCESS_DPI_AWARENESS value);
+typedef HRESULT (*Get_DPI_For_Monitor)(HMONITOR hmonitor, MONITOR_DPI_TYPE dpiType, UINT* dpiX, UINT* dpiY);
+
 int main(int argv, char** argc) {
     Allocator permanent_arena = arena_allocator(
         VirtualAlloc(0, PERMANENT_MEMORY_SIZE, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE),
@@ -232,7 +248,27 @@ int main(int argv, char** argc) {
         .read_file          = win32_read_file,
         .write_file         = win32_write_file,
         .file_metadata      = win32_file_metadata,
+        .dpi_scale          = 1.f,
     };
+
+    // DPI Scaling
+    {
+        HMODULE shcore = LoadLibraryA("shcore.dll");
+        if (shcore) {
+            Set_Process_DPI_Awareness SetProcessDpiAwareness = (Set_Process_DPI_Awareness)GetProcAddress(shcore, "SetProcessDpiAwareness");
+            if (SetProcessDpiAwareness) SetProcessDpiAwareness(PROCESS_SYSTEM_DPI_AWARE);
+
+            HMONITOR main_monitor = MonitorFromWindow(0, MONITOR_DEFAULTTOPRIMARY);
+            Get_DPI_For_Monitor GetDpiForMonitor = (Get_DPI_For_Monitor)GetProcAddress(shcore, "GetDpiForMonitor");
+            if (GetDpiForMonitor) {
+                UINT dpiX, dpiY;
+                GetDpiForMonitor(main_monitor, MDT_EFFECTIVE_DPI, &dpiX, &dpiY);
+                the_platform.dpi_scale = (f32)dpiX / 96.f;
+            }
+
+            FreeLibrary(shcore);
+        }
+    }
 
     // Create the window
     {
@@ -249,7 +285,10 @@ int main(int argv, char** argc) {
         
         RegisterClassA(&window_class);
         
-        RECT adjusted_rect = { 0, 0, WINDOW_WIDTH, WINDOW_HEIGHT };
+        const int dpi_scaled_width  = (int)((f32)WINDOW_WIDTH * the_platform.dpi_scale);
+        const int dpi_scaled_height = (int)((f32)WINDOW_HEIGHT * the_platform.dpi_scale);
+
+        RECT adjusted_rect = { 0, 0, dpi_scaled_width, dpi_scaled_height };
         AdjustWindowRect(&adjusted_rect, WS_OVERLAPPEDWINDOW, 0);
         
         const int width = adjusted_rect.right - adjusted_rect.left;
@@ -276,8 +315,8 @@ int main(int argv, char** argc) {
         assert(window_handle != INVALID_HANDLE_VALUE);
 
         the_platform.window_handle  = window_handle;
-        the_platform.window_width   = WINDOW_WIDTH;
-        the_platform.window_height  = WINDOW_HEIGHT;
+        the_platform.window_width   = width;
+        the_platform.window_height  = height;
     }
     g_platform = &the_platform;
 

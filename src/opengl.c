@@ -39,7 +39,7 @@ b32 upload_texture2d(Texture2d* t) {
         glTexImage2D(
             GL_TEXTURE_2D, 
             0, 
-            format, 
+            t->is_srgb ? GL_SRGB_ALPHA : format, 
             t->width, 
             t->height, 
             0, 
@@ -236,7 +236,12 @@ b32 init_framebuffer(int width, int height, int flags, Framebuffer* framebuffer)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + FCI_Diffuse, GL_TEXTURE_2D, diffuse_texture, 0);
-        result.color[FCI_Diffuse] = (Texture2d) { 0, width, height, 4, diffuse_texture };
+        result.color[FCI_Diffuse] = (Texture2d) {  
+            .width = width, 
+            .height = height, 
+            .depth = 4, 
+            .id = diffuse_texture,
+        };
     }
 
     if ((flags & FF_Normal) != 0) {
@@ -247,7 +252,12 @@ b32 init_framebuffer(int width, int height, int flags, Framebuffer* framebuffer)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + FCI_Normal, GL_TEXTURE_2D, normal_texture, 0);
-        result.color[FCI_Normal] = (Texture2d) { 0, width, height, 4, normal_texture };
+        result.color[FCI_Normal] = (Texture2d) {  
+            .width  = width, 
+            .height = height, 
+            .depth  = 4, 
+            .id     = normal_texture,
+        };
     }
 
     if ((flags & FF_Position) != 0) {
@@ -258,7 +268,12 @@ b32 init_framebuffer(int width, int height, int flags, Framebuffer* framebuffer)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + FCI_Position, GL_TEXTURE_2D, position_texture, 0);
-        result.color[FCI_Position] = (Texture2d) { 0, width, height, 4, position_texture };
+        result.color[FCI_Position] = (Texture2d) {  
+            .width  = width, 
+            .height = height, 
+            .depth  = 4, 
+            .id     = position_texture,
+        };
     }
 
     if ((flags & FF_Depth) != 0) {
@@ -273,7 +288,12 @@ b32 init_framebuffer(int width, int height, int flags, Framebuffer* framebuffer)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_R_TO_TEXTURE);
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, depth_texture, 0);
-        result.depth = (Texture2d) { 0, width, height, 1, depth_texture };
+        result.depth = (Texture2d) {  
+            .width  = width, 
+            .height = height, 
+            .depth  = 1, 
+            .id     = depth_texture,
+        };
     }
 
     if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {

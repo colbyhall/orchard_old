@@ -48,7 +48,7 @@ b32 init_font_collection(u8* data, int len, Allocator asset_memory, Font_Collect
 }
 
 Font* font_at_size(Font_Collection* collection, int size) {
-    size = CLAMP(size, 2, 128);
+    size = CLAMP(size, 2, 512);
 
     for (int i = 0; i < collection->num_fonts; ++i) {
         Font* const f = &collection->fonts[i];
@@ -466,7 +466,7 @@ void imm_flush(void) {
 
 void begin_draw(void) {
     begin_framebuffer(*g_back_buffer);
-    clear_framebuffer(v3s(0.05f));
+    clear_framebuffer(v3s(0.01f));
     set_shader(g_solid_shape_geometry_shader);
 }
 
@@ -500,7 +500,7 @@ void end_draw(void) {
     }
 
     imm_begin();
-    imm_textured_rect(draw_rect, -5.f, v2z(), v2s(1.f), v4(1.f, 1.f, 1.f, 1.f));
+    imm_textured_rect(draw_rect, -5.f, v2z(), v2s(1.f), v4s(1.f));
     imm_flush();
 }
 

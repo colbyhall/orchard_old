@@ -105,6 +105,7 @@ typedef union Vector4 {
 } Vector4;
 
 inline Vector4 v4(f32 x, f32 y, f32 z, f32 w) { return (Vector4) { x, y, z, w }; }
+inline Vector4 v4s(f32 s) { return v4(s, s, s, s); }
 
 typedef union Matrix4 {
     f32 col_row[4][4];

@@ -59,6 +59,7 @@ typedef struct Platform {
     void* window_handle;
     int window_width;
     int window_height;
+    f32 dpi_scale;
 
     f64 current_frame_time;
     f64 last_frame_time;
