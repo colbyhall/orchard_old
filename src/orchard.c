@@ -21,6 +21,7 @@
 #include "math.c"
 #include "opengl.c"
 #include "draw.c"
+#include "asset.c"
 
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb/stb_image.h>
@@ -61,23 +62,23 @@ typedef struct Entity {
     };
 } Entity;
 
-#define ENTITIES_CAP 256
+#define entity_count_CAP 256
 typedef struct Entity_Manager {
-    Entity entities[ENTITIES_CAP];
-    int num_entities;
+    Entity entity_count[entity_count_CAP];
+    int num_entity_count;
 
     Entity_Id last_id;
 } Entity_Manager;
 
 typedef struct Entity_Iterator {
     Entity_Manager* manager;
-    int found_entities;
+    int found_entity_count;
     int index;
 } Entity_Iterator;
 
 static Entity_Iterator make_entity_iterator(Entity_Manager* manager) {
-    for (int i = 0; i < ENTITIES_CAP; ++i) {
-        Entity* const e = &manager->entities[i];
+    for (int i = 0; i < entity_count_CAP; ++i) {
+        Entity* const e = &manager->entity_count[i];
 
         if ((e->flags & EF_Active) == 0) continue;
 
@@ -90,17 +91,17 @@ static Entity_Iterator make_entity_iterator(Entity_Manager* manager) {
 static b32 can_step_entity_iterator(Entity_Iterator iter) {
     return (
         iter.manager != 0 && 
-        iter.index < iter.manager->num_entities && 
-        iter.found_entities < iter.manager->num_entities
+        iter.index < iter.manager->num_entity_count && 
+        iter.found_entity_count < iter.manager->num_entity_count
     );
 }
 
 static void step_entity_iterator(Entity_Iterator* iter) {
-    iter->found_entities++;
-    if (iter->found_entities == iter->manager->num_entities) return;
+    iter->found_entity_count++;
+    if (iter->found_entity_count == iter->manager->num_entity_count) return;
 
-    for (int i = iter->index + 1; i < ENTITIES_CAP; ++i) {
-        Entity* const e = &iter->manager->entities[i];
+    for (int i = iter->index + 1; i < entity_count_CAP; ++i) {
+        Entity* const e = &iter->manager->entity_count[i];
 
         if ((e->flags & EF_Active) == 0) continue;
 
@@ -112,21 +113,21 @@ static void step_entity_iterator(Entity_Iterator* iter) {
 #define entity_iterator(em) Entity_Iterator iter = make_entity_iterator(em); can_step_entity_iterator(iter); step_entity_iterator(&iter)
 
 static Entity* get_entity_from_iterator(Entity_Iterator iter) {
-    return &iter.manager->entities[iter.index];
+    return &iter.manager->entity_count[iter.index];
 }
 
 static Entity* push_entity(Entity_Manager* manager, Entity_Type type) {
-    if (manager->num_entities == ENTITIES_CAP) return 0;
+    if (manager->num_entity_count == entity_count_CAP) return 0;
 
-    for (int i = 0; i < ENTITIES_CAP; ++i) {
-        Entity* const e = &manager->entities[i];
+    for (int i = 0; i < entity_count_CAP; ++i) {
+        Entity* const e = &manager->entity_count[i];
         if ((e->flags & EF_Active) != 0) continue;
 
         *e = (Entity) { 0 };
         e->id = ++manager->last_id;
         e->type = type;
         e->flags = EF_Active;
-        manager->num_entities++;
+        manager->num_entity_count++;
         return e;
     }
 
@@ -146,7 +147,7 @@ static b32 pop_entity(Entity_Manager* manager, Entity_Id id) {
     Entity* const e = find_entity(manager, id);
     if (e == 0) return false;
     *e = (Entity) { 0 };
-    manager->num_entities--;
+    manager->num_entity_count--;
     return true;
 }
 
@@ -184,7 +185,6 @@ static void tick_character(Entity* e, f32 dt) {
         e->flipped = true;
     }
 
-
     if (!e->pressed_jump && g_platform->input.keys_down[KEY_SPACE]) {
         e->pressed_jump = true;
         e->velocity.y = 200.f;
@@ -192,7 +192,6 @@ static void tick_character(Entity* e, f32 dt) {
 
     // Vertical movement
     {
-
         const Vector2 old_position      = e->position.xy;
         const Vector2 target_position   = v2_add(old_position, v2_mul(v2(0.f, e->velocity.y), v2s(dt)));
         const Vector2 target_move       = v2_sub(target_position, old_position);
@@ -215,23 +214,15 @@ static void tick_character(Entity* e, f32 dt) {
                 if (new_distance < distance) {
                     distance = new_distance;
                     impact_normal = result.normal;
-                } else if (new_distance == distance) {
-                    impact_normal = v2_add(impact_normal, result.normal);
-                }
+                } else if (new_distance == distance) impact_normal = v2_add(impact_normal, result.normal);
             }
         }
 
-        if (isnan(distance)) { // @CRT
-            distance = 0.f;
-        }
+        if (isnan(distance)) distance = 0.f; // @CRT
 
         if (distance != 1.f) {
-            if (impact_normal.x != 0.f) {
-                e->velocity.x = 0.f;
-            }
-            if (impact_normal.y != 0.f) {
-                e->velocity.y = 0.f;
-            }
+            if (impact_normal.x != 0.f) e->velocity.x = 0.f;
+            if (impact_normal.y != 0.f) e->velocity.y = 0.f;
 
             e->pressed_jump = false;
         }
@@ -264,23 +255,15 @@ static void tick_character(Entity* e, f32 dt) {
                 if (new_distance < distance) {
                     distance = new_distance;
                     impact_normal = result.normal;
-                } else if (new_distance == distance) {
-                    impact_normal = v2_add(impact_normal, result.normal);
-                }
+                } else if (new_distance == distance) impact_normal = v2_add(impact_normal, result.normal);
             }
         }
 
-        if (isnan(distance)) { // @CRT
-            distance = 0.f;
-        }
+        if (isnan(distance)) distance = 0.f; // @CRT
 
         if (distance != 1.f) {
-            if (impact_normal.x != 0.f) {
-                e->velocity.x = 0.f;
-            }
-            if (impact_normal.y != 0.f) {
-                e->velocity.y = 0.f;
-            }
+            if (impact_normal.x != 0.f) e->velocity.x = 0.f;
+            if (impact_normal.y != 0.f) e->velocity.y = 0.f;
         }
 
         const Vector2 new_position = v2_add(old_position, v2_mul(target_move, v2s(distance)));
@@ -314,6 +297,7 @@ DLL_EXPORT void init_game(Platform* platform) {
 
     init_opengl(platform);
     init_draw(platform->permanent_arena);
+    init_asset_manager(platform);
     g_game_state = mem_alloc_struct(platform->permanent_arena, Game_State);
     g_character_texture = mem_alloc_struct(platform->permanent_arena, Texture2d);
     if (!g_game_state->is_initialized) {
@@ -357,9 +341,9 @@ DLL_EXPORT void tick_game(f32 dt) {
         Entity* const e = get_entity_from_iterator(iter);
 
         switch (e->type) {
-#define TICK_ENTITIES(t, f) case t: f(e, dt); break;
-            ENTITY_TICK(TICK_ENTITIES);
-#undef TICK_ENTITIES
+#define TICK_entity_count(t, f) case t: f(e, dt); break;
+            ENTITY_TICK(TICK_entity_count);
+#undef TICK_entity_count
         };
     }
 
@@ -377,9 +361,9 @@ DLL_EXPORT void tick_game(f32 dt) {
             Entity* const e = get_entity_from_iterator(iter);
 
             switch (e->type) {
-#define DRAW_ENTITIES(t, f) case t: f(e); break;
-                ENTITY_DRAW(DRAW_ENTITIES);
-#undef DRAW_ENTITIES
+#define DRAW_entity_count(t, f) case t: f(e); break;
+                ENTITY_DRAW(DRAW_entity_count);
+#undef DRAW_entity_count
             };
         }
     }

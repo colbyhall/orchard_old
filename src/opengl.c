@@ -119,8 +119,8 @@ b32 init_shader(Shader* shader) {
     glDeleteShader(vert_id);
     glDeleteShader(frag_id);
 
-    glGetProgramiv(program_id, GL_ACTIVE_UNIFORMS, &shader->num_uniforms);
-    for (GLint i = 0; i < shader->num_uniforms; ++i) {
+    glGetProgramiv(program_id, GL_ACTIVE_UNIFORMS, &shader->uniform_count);
+    for (GLint i = 0; i < shader->uniform_count; ++i) {
         GLsizei length;
         GLint size;
         GLenum type;
@@ -166,7 +166,7 @@ Shader_Uniform* find_uniform(const char* name, GLenum type) {
         return false;
     }
 
-    for (int i = 0; i < s->num_uniforms; ++i) {
+    for (int i = 0; i < s->uniform_count; ++i) {
         Shader_Uniform* const it = &s->uniforms[i];
 
         if (strcmp(name, it->name) != 0) continue; // @CRT

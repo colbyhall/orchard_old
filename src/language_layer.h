@@ -161,6 +161,7 @@ inline void _assert_implementation(b32 cond, b32 do_segfault, u32 line, const ch
 #define mem_copy    memcpy
 #define mem_move    memmove
 #define str_len     strlen
+#define str_cmp     strcmp
 
 typedef struct Allocator {
     void* data;

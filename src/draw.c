@@ -50,23 +50,23 @@ b32 init_font_collection(u8* data, int len, Allocator asset_memory, Font_Collect
 Font* font_at_size(Font_Collection* collection, int size) {
     size = CLAMP(size, 2, 512);
 
-    for (int i = 0; i < collection->num_fonts; ++i) {
+    for (int i = 0; i < collection->font_count; ++i) {
         Font* const f = &collection->fonts[i];
         if (f->size == size) {
             return f;
         }
     }
 
-    assert(collection->num_fonts + 1 < FONT_CAP);
+    assert(collection->font_count + 1 < FONT_CAP);
 
     int ascent, descent, line_gap;
     stbtt_GetFontVMetrics(&collection->info, &ascent, &descent, &line_gap);
 
-    Font* const f = &collection->fonts[collection->num_fonts++];
+    Font* const f = &collection->fonts[collection->font_count++];
 
     f->size = size;
     f->info = &collection->info;
-    f->num_glyphs = collection->codepoint_count;
+    f->glyph_count = collection->codepoint_count;
 
     const f32 font_scale = stbtt_ScaleForPixelHeight(&collection->info, (f32)size);
     f->ascent   = (f32)ascent * font_scale;
@@ -151,7 +151,7 @@ Font* font_at_size(Font_Collection* collection, int size) {
 Font_Glyph* glyph_from_rune(Font* f, Rune r) {
     const int index = stbtt_FindGlyphIndex(f->info, r);
     if (index > 0) {
-        assert(index < f->num_glyphs);
+        assert(index < f->glyph_count);
         return &f->glyphs[index];
     }
 

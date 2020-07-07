@@ -2,6 +2,7 @@
 #define DRAW_H
 
 #include "math.h"
+#include "opengl.h"
 #include <stb/stb_truetype.h>
 
 typedef struct Font_Glyph {
@@ -17,7 +18,7 @@ typedef struct Font {
     f32 ascent, descent, line_gap;
 
     Font_Glyph* glyphs;
-    int num_glyphs;
+    int glyph_count;
 
     Texture2d atlas;
     stbtt_fontinfo* info; // @HACK(colby): This really sucks
@@ -28,7 +29,7 @@ typedef struct Font_Collection {
     stbtt_fontinfo info;
 
     Font fonts[FONT_CAP];
-    int num_fonts;
+    int font_count;
 
     int* codepoint_indices;
     int codepoint_count;

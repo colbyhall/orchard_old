@@ -16,12 +16,6 @@ typedef struct File_Handle {
     int flags;
 } File_Handle; 
 
-typedef enum Directory_Entry_Type {
-    DET_File,
-    DET_Director,
-    DET_Unknown,
-} Directory_Entry_Type;
-
 typedef struct File_Metadata {
     u64 creation_time;
     u64 last_access_time;
@@ -30,6 +24,19 @@ typedef struct File_Metadata {
     int size;
     b32 read_only;
 } File_Metadata;
+
+typedef enum Directory_Entry_Type {
+    DET_File,
+    DET_Directory,
+    DET_Unknown,
+} Directory_Entry_Type;
+
+typedef struct Directory_Result {
+    String path;
+    File_Metadata metadata;
+    Directory_Entry_Type type;
+    struct Directory_Result* next;
+} Directory_Result;
 
 #define PLATFORM_OPEN_FILE(name) b32 name(const char* path, int flags, File_Handle* handle)
 typedef PLATFORM_OPEN_FILE(Platform_Open_File);
@@ -46,6 +53,11 @@ typedef PLATFORM_WRITE_FILE(Platform_Write_File);
 #define PLATFORM_FILE_METADATA(name) b32 name(const char* path, File_Metadata* metadata)
 typedef PLATFORM_FILE_METADATA(Platform_File_Metadata);
 
+#define PLATFORM_FIND_ALL_FILES_IN_DIR(name) Directory_Result* name(const char* path, b32 do_recursive, Allocator allocator)
+typedef PLATFORM_FIND_ALL_FILES_IN_DIR(Platform_Find_All_Files_In_Dir);
+
+#define directory_iterator(path, do_recursive, allocator) Directory_Result* iter = g_platform->find_all_files_in_dir(path, do_recursive, allocator); iter != 0; iter = iter->next
+
 typedef struct Platform {
     Allocator permanent_arena;
 
@@ -55,6 +67,8 @@ typedef struct Platform {
     Platform_Read_File*         read_file;
     Platform_Write_File*        write_file;
     Platform_File_Metadata*     file_metadata;
+
+    Platform_Find_All_Files_In_Dir* find_all_files_in_dir;
 
     void* window_handle;
     int window_width;

@@ -129,13 +129,13 @@ static PLATFORM_FILE_METADATA(win32_file_metadata) {
     WIN32_FILE_ATTRIBUTE_DATA file_data;
     if (GetFileAttributesExA(path, GetFileExInfoStandard, &file_data)) {
         const FILETIME creation_time = file_data.ftCreationTime;
-        metadata->creation_time = (creation_time.dwHighDateTime << 16) | creation_time.dwLowDateTime;
+        metadata->creation_time = (u64)creation_time.dwHighDateTime << 32 | creation_time.dwLowDateTime;
 
         const FILETIME last_access_time = file_data.ftLastAccessTime;
-        metadata->last_access_time = (last_access_time.dwHighDateTime << 16) | last_access_time.dwLowDateTime;
+        metadata->last_access_time = (u64)last_access_time.dwHighDateTime << 32 | last_access_time.dwLowDateTime;
 
         const FILETIME last_write_time = file_data.ftLastWriteTime;
-        metadata->last_write_time = (last_write_time.dwHighDateTime << 16) | last_write_time.dwLowDateTime;
+        metadata->last_write_time = (u64)last_write_time.dwHighDateTime << 32 | last_write_time.dwLowDateTime;
 
         metadata->size = (int)file_data.nFileSizeLow;
         metadata->read_only = (file_data.dwFileAttributes & FILE_ATTRIBUTE_READONLY) != 0;
@@ -143,6 +143,72 @@ static PLATFORM_FILE_METADATA(win32_file_metadata) {
     }
 
     return false;
+}
+
+static PLATFORM_FIND_ALL_FILES_IN_DIR(win32_find_all_files_in_dir) {
+    // @Cleanup paths on windows can be any len now. 
+    const usize path_len = str_len(path);
+    char path_final[MAX_PATH];
+    mem_copy(path_final, path, path_len);
+    char* path_end = path_final + path_len;
+
+    // @Cleanup @Cleanup @Cleanup @Cleanup
+    if (path_final[path_len - 1] != '\\' && path_final[path_len - 1] != '/') {
+        assert(path_len < path_len + 3);
+        mem_copy(path_end, "\\*\0", 3);
+    } else {
+        assert(path_len < path_len + 2);
+        mem_copy(path_end, "*\0", 2);
+    }
+
+    WIN32_FIND_DATAA find_data;
+    HANDLE find_handle = FindFirstFileA(path_final, &find_data);
+
+    Directory_Result* first = 0;
+    Directory_Result* last = 0;
+    do {
+        Directory_Result* const current = mem_alloc_struct(allocator, Directory_Result);
+        current->next = 0;
+        if (last) last->next = current;
+        last = current;
+        if (!first) first = current;
+
+        File_Metadata* const metadata = &current->metadata;
+
+        const FILETIME creation_time = find_data.ftCreationTime;
+        metadata->creation_time = (u64)creation_time.dwHighDateTime << 32 | creation_time.dwLowDateTime;
+        const FILETIME last_access_time = find_data.ftLastAccessTime;
+        metadata->last_access_time = (u64)last_access_time.dwHighDateTime << 32 | last_access_time.dwLowDateTime;
+        const FILETIME last_write_time = find_data.ftLastWriteTime;
+        metadata->last_write_time = (u64)last_write_time.dwHighDateTime << 32 | last_write_time.dwLowDateTime;
+
+        String* const built_path = &current->path;
+        const b32 ends_with_slash = path[path_len - 1] == '\\' || path[path_len - 1] == '/';
+        const usize built_path_allocation_size = path_len + str_len(find_data.cFileName) + ends_with_slash + 2;
+        built_path->data = mem_alloc_array(allocator, u8, built_path_allocation_size);
+        built_path->len = sprintf((char*)built_path->data, ends_with_slash ? "%s%s" : "%s/%s", path, find_data.cFileName);
+        built_path->data[built_path->len] = 0;
+        built_path->allocator = allocator;
+
+        if (find_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+            current->type = DET_Directory;
+
+            if (do_recursive && str_cmp(find_data.cFileName, ".") != 0 && str_cmp(find_data.cFileName, "..") != 0) {
+                current->next = win32_find_all_files_in_dir((const char*)current->path.data, do_recursive, allocator);
+
+                // @SPEED(colby): This kind of sucks
+                while (last->next) last = last->next;
+            }
+        } else {
+            current->type = DET_File;
+            metadata->read_only = (find_data.dwFileAttributes & FILE_ATTRIBUTE_READONLY) != 0;
+            metadata->size = find_data.nFileSizeLow;
+        }
+    } while (FindNextFileA(find_handle, &find_data));
+
+    FindClose(find_handle);
+
+    return first;
 }
 
 static LRESULT the_window_proc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam) {
@@ -248,6 +314,7 @@ int main(int argv, char** argc) {
         .read_file          = win32_read_file,
         .write_file         = win32_write_file,
         .file_metadata      = win32_file_metadata,
+        .find_all_files_in_dir = win32_find_all_files_in_dir,
         .dpi_scale          = 1.f,
     };
 

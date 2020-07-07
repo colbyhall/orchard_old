@@ -261,7 +261,7 @@ typedef struct Shader {
     int source_len;
 
     Shader_Uniform uniforms[SHADER_UNIFORM_CAP];
-    int num_uniforms;
+    int uniform_count;
 } Shader;
 
 b32 init_shader(Shader* shader);
