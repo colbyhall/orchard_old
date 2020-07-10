@@ -1,4 +1,5 @@
 #include "opengl.h"
+#include "debug.h"
 
 #if PLATFORM_WINDOWS
 #include "opengl_win32.c"
@@ -39,7 +40,7 @@ b32 upload_texture2d(Texture2d* t) {
         glTexImage2D(
             GL_TEXTURE_2D, 
             0, 
-            t->is_srgb ? GL_SRGB_ALPHA : format, 
+            t->depth == 4 ? GL_SRGB_ALPHA : format, 
             t->width, 
             t->height, 
             0, 
@@ -72,10 +73,10 @@ b32 init_shader(Shader* shader) {
 
     const GLchar* shader_header = "#version 330 core\n#extension GL_ARB_seperate_shader_objects: enable\n";
 
-    assert(shader->source);
+    assert(shader->source.data && shader->source.len);
 
-    const GLchar* vert_shader[] = { shader_header, "#define VERTEX 1\n", (const GLchar*)shader->source };
-    const GLchar* frag_shader[] = { shader_header, "#define FRAGMENT 1\n", (const GLchar*)shader->source };
+    const GLchar* vert_shader[] = { shader_header, "#define VERTEX 1\n", (const GLchar*)shader->source.data };
+    const GLchar* frag_shader[] = { shader_header, "#define FRAGMENT 1\n", (const GLchar*)shader->source.data };
 
     glShaderSource(vert_id, 3, vert_shader, 0);
     glShaderSource(frag_id, 3, frag_shader, 0);
@@ -101,17 +102,18 @@ b32 init_shader(Shader* shader) {
         glGetShaderInfoLog(frag_id, sizeof(frag_errors), &ignored, frag_errors);
         glGetProgramInfoLog(program_id, sizeof(program_errors), &ignored, program_errors);
 
+        o_log_error("[OpenGL] Shader compile failed");
         if (vert_errors[0] != 0)
         {
-            printf(vert_errors);
+            o_log_error(vert_errors);
         }
         if (frag_errors[0] != 0)
         {
-            printf(frag_errors);
+            o_log_error(frag_errors);
         }
         if (program_errors[0] != 0)
         {
-            printf(program_errors);
+            o_log_error(program_errors);
         }
         return false;
     }
@@ -162,24 +164,24 @@ static
 Shader_Uniform* find_uniform(const char* name, GLenum type) {
     Shader* const s = get_bound_shader();
     if (!s) {
-        printf("[OpenGL] Tried to set uniform but no shader was bound\n");
+        o_log_error("[OpenGL] Tried to set uniform but no shader was bound\n");
         return false;
     }
 
     for (int i = 0; i < s->uniform_count; ++i) {
         Shader_Uniform* const it = &s->uniforms[i];
 
-        if (strcmp(name, it->name) != 0) continue; // @CRT
+        if (str_cmp(name, it->name) != 0) continue;
 
         if (it->type != type) {
-            printf("[OpenGL] Tried to set uniform with wrong type. %s has the type of %s\n", name, get_shader_var_type_string(GL_FLOAT_MAT4));
+            o_log_error("[OpenGL] Tried to set uniform with wrong type. %s has the type of %s\n", name, get_shader_var_type_string(GL_FLOAT_MAT4));
             return 0;
         }
 
         return it;
     }
 
-    printf("[OpenGL] Failed to find uniform %s\n", name);
+    o_log_error("[OpenGL] Failed to find uniform %s\n", name);
     return 0;
 }
 

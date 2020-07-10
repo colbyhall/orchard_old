@@ -39,7 +39,7 @@ static void* arena_alloc(Allocator allocator, void* ptr, usize size, usize align
     return 0;
 }
 
-Allocator arena_allocator(void* base, usize size) {
+Allocator arena_allocator_raw(void* base, usize size) {
     assert(sizeof(Memory_Arena) < size);
 
     Memory_Arena* const arena = base;
@@ -50,6 +50,11 @@ Allocator arena_allocator(void* base, usize size) {
     };
 
     return (Allocator) { base, arena_alloc };
+}
+
+Allocator arena_allocator(usize size, Allocator allocator) {
+    size += sizeof(Memory_Arena);
+    return arena_allocator_raw(mem_alloc_array(allocator, u8, size), size);
 }
 
 static void* null_alloc(Allocator allocator, void* ptr, usize size, usize alignment) {

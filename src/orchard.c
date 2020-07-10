@@ -18,13 +18,12 @@
 #endif
 
 #include "memory.c"
+#include "string.c"
 #include "math.c"
+#include "debug.c"
 #include "opengl.c"
 #include "draw.c"
 #include "asset.c"
-
-#define STB_IMAGE_IMPLEMENTATION
-#include <stb/stb_image.h>
 
 Platform* g_platform = 0;
 
@@ -295,11 +294,14 @@ static void draw_static_object(Entity* e) {
 DLL_EXPORT void init_game(Platform* platform) {
     g_platform = platform;
 
+    init_logger(platform);
     init_opengl(platform);
-    init_draw(platform->permanent_arena);
     init_asset_manager(platform);
+    init_draw(platform->permanent_arena);
+
+    // Init Game State
     g_game_state = mem_alloc_struct(platform->permanent_arena, Game_State);
-    g_character_texture = mem_alloc_struct(platform->permanent_arena, Texture2d);
+    g_character_texture = find_texture2d(string_from_raw("assets/sprites/test_character"));
     if (!g_game_state->is_initialized) {
         Entity_Manager* const em = &g_game_state->entity_manager;
         
@@ -316,20 +318,6 @@ DLL_EXPORT void init_game(Platform* platform) {
         Entity* const player = push_entity(em, ET_Character);
         player->bounds = v2(METER, 2 * METER);
 
-        String character_sprite_source;
-        if (!read_file_into_string("assets\\sprites\\test_character.png", &character_sprite_source, platform->permanent_arena)) assert(false);
-
-        stbi_set_flip_vertically_on_load(true);
-
-        g_character_texture->is_srgb = true;
-        g_character_texture->pixels = stbi_load_from_memory(
-            EXPAND_STRING(character_sprite_source), 
-            &g_character_texture->width,
-            &g_character_texture->height,
-            &g_character_texture->depth,
-            0
-        );
-        upload_texture2d(g_character_texture);
 
         g_game_state->is_initialized = true;
     }
@@ -379,7 +367,7 @@ DLL_EXPORT void tick_game(f32 dt) {
         set_uniform_texture("atlas", the_font->atlas);
 
         imm_begin();
-        imm_string(FROM_LITERAL("Hello World!"), the_font, 1000.f, v2z(), -5.f, v4(1.f, 1.f, 1.f, 1.f));
+        imm_string(string_from_raw("Hello World!"), the_font, 1000.f, v2z(), -5.f, v4(1.f, 1.f, 1.f, 1.f));
         imm_flush();
     }
 

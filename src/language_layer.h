@@ -155,7 +155,7 @@ inline void _assert_implementation(b32 cond, b32 do_segfault, u32 line, const ch
 #define megabyte(b) (kilobyte(b) * 1024LL)
 #define gigabyte(b) (megabyte(b) * 1024LL)
 
-#define ARRAY_COUNT(x) (sizeof(x) / sizeof(x[0]))
+#define array_count(x) (sizeof(x) / sizeof(x[0]))
 
 // @NOTE(colby): Maybe one day we wont use the cruntime
 #define mem_copy    memcpy
@@ -192,13 +192,45 @@ typedef struct Memory_Arena {
     usize   total;
 } Memory_Arena;
 
-Allocator arena_allocator(void* base, usize size);
+Allocator arena_allocator_raw(void* base, usize size);
+Allocator arena_allocator(usize size, Allocator allocator);
 inline void reset_arena(Allocator allocator) {
     Memory_Arena* const arena = allocator.data;
     arena->used = 0;
 }
 
+typedef struct Temp_Memory {
+    Memory_Arena* arena;
+    usize used;
+} Temp_Memory;
+
+inline Temp_Memory begin_temp_memory(Allocator allocator) {
+    Memory_Arena* const arena = allocator.data;
+    return (Temp_Memory) { arena, arena->used, };
+}
+
+inline void end_temp_memory(Temp_Memory temp_mem) {
+    Memory_Arena* const arena = temp_mem.arena;
+    assert(arena);
+    arena->used = temp_mem.used;
+}
+
 typedef u32 Rune;
+
+inline b32 is_whitespace(Rune r) { 
+    if (r < 0x2000) return (r >= '\t' && r <= '\r') || r == ' ';
+
+    return r == 0x200A || r == 0x2028 || r == 0x2029 || r == 0x202f || r == 0x205f || r == 0x3000;
+}
+
+inline b32 is_letter(Rune r) {
+    r |= 0x20;
+    return r >= 'a' && r <= 'z';
+}
+
+inline b32 is_digit(Rune r) {
+    return r >= '0' && r <= '9';
+}
 
 typedef struct String {
     u8* data;
@@ -206,7 +238,30 @@ typedef struct String {
     Allocator allocator;
 } String;
 
-#define FROM_LITERAL(cstr) (String) { (u8*)cstr, (int)str_len(cstr), null_allocator() }
-#define EXPAND_STRING(str) str.data, str.len 
+#define string_from_raw(cstr) (String) { (u8*)cstr, (int)str_len(cstr), null_allocator() }
+#define expand_string(str) str.data, str.len 
+
+typedef struct Rune_Iterator {
+    String the_string;
+
+    u32 decoder_state;
+    Rune rune;
+    int index;
+} Rune_Iterator;
+
+Rune_Iterator make_rune_iterator(String the_string);
+b32 can_step_rune_iterator(Rune_Iterator iter);
+void step_rune_iterator(Rune_Iterator* iter);
+Rune rune(Rune_Iterator iter);
+Rune peek_rune(Rune_Iterator iter);
+
+#define rune_iterator(the_string) Rune_Iterator iter = make_rune_iterator(the_string); can_step_rune_iterator(iter); step_rune_iterator(&iter)
+
+int rune_count(String the_string);
+String advance_string(String the_string, int amount);
+int find_from_left(String the_string, Rune r);
+b32 string_equal(String a, String b);
+String copy_string(String a, Allocator allocator);
+b32 starts_with(String a, String b);
 
 #endif /* LANGUAGE_LAYER_H */

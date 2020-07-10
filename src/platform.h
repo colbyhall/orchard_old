@@ -38,7 +38,7 @@ typedef struct Directory_Result {
     struct Directory_Result* next;
 } Directory_Result;
 
-#define PLATFORM_OPEN_FILE(name) b32 name(const char* path, int flags, File_Handle* handle)
+#define PLATFORM_OPEN_FILE(name) b32 name(String path, int flags, File_Handle* handle)
 typedef PLATFORM_OPEN_FILE(Platform_Open_File);
 
 #define PLATFORM_CLOSE_FILE(name) b32 name(File_Handle* handle)
@@ -50,17 +50,35 @@ typedef PLATFORM_READ_FILE(Platform_Read_File);
 #define PLATFORM_WRITE_FILE(name) b32 name(File_Handle handle, u8* ptr, int size)
 typedef PLATFORM_WRITE_FILE(Platform_Write_File);
 
-#define PLATFORM_FILE_METADATA(name) b32 name(const char* path, File_Metadata* metadata)
+#define PLATFORM_FILE_METADATA(name) b32 name(String path, File_Metadata* metadata)
 typedef PLATFORM_FILE_METADATA(Platform_File_Metadata);
 
-#define PLATFORM_FIND_ALL_FILES_IN_DIR(name) Directory_Result* name(const char* path, b32 do_recursive, Allocator allocator)
+#define PLATFORM_FIND_ALL_FILES_IN_DIR(name) Directory_Result* name(String path, b32 do_recursive, Allocator allocator)
 typedef PLATFORM_FIND_ALL_FILES_IN_DIR(Platform_Find_All_Files_In_Dir);
 
 #define directory_iterator(path, do_recursive, allocator) Directory_Result* iter = g_platform->find_all_files_in_dir(path, do_recursive, allocator); iter != 0; iter = iter->next
 
+#define PLATFORM_CREATE_DIRECTORY(name) b32 name(String path)
+typedef PLATFORM_CREATE_DIRECTORY(Platform_Create_Directory);
+
+typedef struct System_Time {
+    u16 year;
+    u16 month;
+    u16 day_of_week;
+    u16 day_of_month;
+    u16 hour;
+    u16 minute;
+    u16 second;
+    u16 milli;
+} System_Time;
+
+#define PLATFORM_LOCAL_TIME(name) System_Time name(void)
+typedef PLATFORM_LOCAL_TIME(Platform_Local_Time);
+
 typedef struct Platform {
     Allocator permanent_arena;
-
+    Allocator frame_arena;
+    
     // The whole point of doing this is to build layers. We have a platform layer which contains our platform api
     Platform_Open_File*         open_file;
     Platform_Close_File*        close_file;
@@ -69,6 +87,9 @@ typedef struct Platform {
     Platform_File_Metadata*     file_metadata;
 
     Platform_Find_All_Files_In_Dir* find_all_files_in_dir;
+    Platform_Create_Directory*      create_directory;
+
+    Platform_Local_Time*        local_time;
 
     void* window_handle;
     int window_width;
@@ -83,7 +104,7 @@ typedef struct Platform {
 
 extern Platform* g_platform;
 
-inline b32 read_file_into_string(const char* path, String* string, Allocator allocator) {
+inline b32 read_file_into_string(String path, String* string, Allocator allocator) {
     File_Handle handle;
     if (!g_platform->open_file(path, FF_Read, &handle)) return false;
 

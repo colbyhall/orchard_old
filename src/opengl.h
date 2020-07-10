@@ -237,7 +237,6 @@ void swap_gl_buffers(Platform* platform);
 typedef struct Texture2d {
     u8* pixels;
     int width, height, depth;
-    b32 is_srgb;
 
     GLuint id;
 } Texture2d;
@@ -257,8 +256,7 @@ typedef struct Shader_Uniform {
 typedef struct Shader {
     GLuint id;
 
-    GLchar* source;
-    int source_len;
+    String source;
 
     Shader_Uniform uniforms[SHADER_UNIFORM_CAP];
     int uniform_count;

@@ -1,6 +1,7 @@
 #include "platform.h"
 #include "memory.c"
 #include "program_options.h"
+#include "string.c"
 
 // Windows include needs to happen before _win32.c includes
 #define WIN32_LEAN_AND_MEAN
@@ -53,7 +54,7 @@ static void new_dll_path(char* buffer) {
 
 static b32 try_reload_dll(Game_Code* game_code) {
     File_Metadata metadata;
-    const b32 found_metadata = g_platform->file_metadata(dll_path, &metadata);
+    const b32 found_metadata = g_platform->file_metadata(string_from_raw(dll_path), &metadata);
     if (!found_metadata) {
         return false;
     }
@@ -95,13 +96,12 @@ static PLATFORM_OPEN_FILE(win32_open_file) {
     if (create) creation = OPEN_ALWAYS;
 
     // Try to create the file
-    void* const os_handle = CreateFileA(path, desired_access, FILE_SHARE_READ | FILE_SHARE_WRITE, 0, creation, FILE_ATTRIBUTE_NORMAL, 0);
+    void* const os_handle = CreateFileA((const char*)path.data, desired_access, FILE_SHARE_READ | FILE_SHARE_WRITE, 0, creation, FILE_ATTRIBUTE_NORMAL, 0);
     const b32 is_open = os_handle != INVALID_HANDLE_VALUE;
 
     // If we actually opened the file then fill out the handle data
     if (is_open) {
-        const String wrapped_path = { (u8*)path, (int)str_len(path) };
-        *handle = (File_Handle) { os_handle, wrapped_path, flags };
+        *handle = (File_Handle) { os_handle, path, flags };
         return true;
     }
     
@@ -127,7 +127,9 @@ static PLATFORM_WRITE_FILE(win32_write_file) {
 
 static PLATFORM_FILE_METADATA(win32_file_metadata) {
     WIN32_FILE_ATTRIBUTE_DATA file_data;
-    if (GetFileAttributesExA(path, GetFileExInfoStandard, &file_data)) {
+    if (GetFileAttributesExA((const char*)path.data, GetFileExInfoStandard, &file_data)) {
+        if (!metadata) return true;
+        
         const FILETIME creation_time = file_data.ftCreationTime;
         metadata->creation_time = (u64)creation_time.dwHighDateTime << 32 | creation_time.dwLowDateTime;
 
@@ -147,9 +149,9 @@ static PLATFORM_FILE_METADATA(win32_file_metadata) {
 
 static PLATFORM_FIND_ALL_FILES_IN_DIR(win32_find_all_files_in_dir) {
     // @Cleanup paths on windows can be any len now. 
-    const usize path_len = str_len(path);
+    const usize path_len = (usize)path.len;
     char path_final[MAX_PATH];
-    mem_copy(path_final, path, path_len);
+    mem_copy(path_final, path.data, path_len);
     char* path_end = path_final + path_len;
 
     // @Cleanup @Cleanup @Cleanup @Cleanup
@@ -183,10 +185,10 @@ static PLATFORM_FIND_ALL_FILES_IN_DIR(win32_find_all_files_in_dir) {
         metadata->last_write_time = (u64)last_write_time.dwHighDateTime << 32 | last_write_time.dwLowDateTime;
 
         String* const built_path = &current->path;
-        const b32 ends_with_slash = path[path_len - 1] == '\\' || path[path_len - 1] == '/';
+        const b32 ends_with_slash = path.data[path_len - 1] == '\\' || path.data[path_len - 1] == '/';
         const usize built_path_allocation_size = path_len + str_len(find_data.cFileName) + ends_with_slash + 2;
         built_path->data = mem_alloc_array(allocator, u8, built_path_allocation_size);
-        built_path->len = sprintf((char*)built_path->data, ends_with_slash ? "%s%s" : "%s/%s", path, find_data.cFileName);
+        built_path->len = sprintf((char*)built_path->data, ends_with_slash ? "%s%s" : "%s/%s", (const char*)path.data, find_data.cFileName);
         built_path->data[built_path->len] = 0;
         built_path->allocator = allocator;
 
@@ -194,7 +196,7 @@ static PLATFORM_FIND_ALL_FILES_IN_DIR(win32_find_all_files_in_dir) {
             current->type = DET_Directory;
 
             if (do_recursive && str_cmp(find_data.cFileName, ".") != 0 && str_cmp(find_data.cFileName, "..") != 0) {
-                current->next = win32_find_all_files_in_dir((const char*)current->path.data, do_recursive, allocator);
+                current->next = win32_find_all_files_in_dir(current->path, do_recursive, allocator);
 
                 // @SPEED(colby): This kind of sucks
                 while (last->next) last = last->next;
@@ -209,6 +211,26 @@ static PLATFORM_FIND_ALL_FILES_IN_DIR(win32_find_all_files_in_dir) {
     FindClose(find_handle);
 
     return first;
+}
+
+static PLATFORM_CREATE_DIRECTORY(win32_create_directory) {
+    return CreateDirectoryA((const char*)path.data, 0);
+}
+
+static PLATFORM_LOCAL_TIME(win32_local_time) {
+    SYSTEMTIME time;
+    GetLocalTime(&time);
+
+    return (System_Time) {
+        time.wYear,
+        time.wMonth,
+        time.wDayOfWeek,
+        time.wDay,
+        time.wHour,
+        time.wMinute,
+        time.wSecond,
+        time.wMilliseconds,
+    };
 }
 
 static LRESULT the_window_proc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam) {
@@ -287,9 +309,14 @@ typedef HRESULT (*Set_Process_DPI_Awareness)(PROCESS_DPI_AWARENESS value);
 typedef HRESULT (*Get_DPI_For_Monitor)(HMONITOR hmonitor, MONITOR_DPI_TYPE dpiType, UINT* dpiX, UINT* dpiY);
 
 int main(int argv, char** argc) {
-    Allocator permanent_arena = arena_allocator(
-        VirtualAlloc(0, PERMANENT_MEMORY_SIZE, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE),
-        PERMANENT_MEMORY_SIZE
+    Allocator permanent_arena = arena_allocator_raw(
+        VirtualAlloc(0, PERMANENT_MEMORY_CAP, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE),
+        PERMANENT_MEMORY_CAP
+    );
+    
+    Allocator frame_arena = arena_allocator_raw(
+        VirtualAlloc(0, FRAME_MEMORY_CAP, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE),
+        FRAME_MEMORY_CAP
     );
 
     // Move us to project base dir
@@ -309,12 +336,15 @@ int main(int argv, char** argc) {
 
     Platform the_platform = {
         .permanent_arena    = permanent_arena,
+        .frame_arena        = frame_arena,
         .open_file          = win32_open_file,
         .close_file         = win32_close_file,
         .read_file          = win32_read_file,
         .write_file         = win32_write_file,
         .file_metadata      = win32_file_metadata,
         .find_all_files_in_dir = win32_find_all_files_in_dir,
+        .create_directory   = win32_create_directory,
+        .local_time         = win32_local_time,
         .dpi_scale          = 1.f,
     };
 
@@ -390,13 +420,14 @@ int main(int argv, char** argc) {
     // Load game code
     Game_Code_VTable game_code_vtable;
     Game_Code game_code = {
-        .function_count = ARRAY_COUNT(game_code_vtable_names),
+        .function_count = array_count(game_code_vtable_names),
         .functions      = (void**)&game_code_vtable,
     };
     const b32 loaded_game_code = try_reload_dll(&game_code);
     assert(loaded_game_code);
 
     game_code_vtable.init_game(g_platform);
+    reset_arena(the_platform.frame_arena);
 
     LARGE_INTEGER qpc_freq;
     QueryPerformanceFrequency(&qpc_freq);
@@ -428,11 +459,13 @@ int main(int argv, char** argc) {
 
         const f32 dt  = (f32)(g_platform->current_frame_time - g_platform->last_frame_time);
         game_code_vtable.tick_game(dt);
+        reset_arena(the_platform.frame_arena);
 
         // Do a hot reload if we can
         if (try_reload_dll(&game_code)) {
             reset_arena(the_platform.permanent_arena);
             game_code_vtable.init_game(g_platform);
+            reset_arena(the_platform.frame_arena);
         }
     }
 

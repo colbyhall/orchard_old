@@ -113,7 +113,7 @@ b32 init_opengl(Platform* platform) {
 
     g_gl_context->is_initialized = true;
 
-    printf("[OpenGL] Loaded opengl with version %i:%i.", g_gl_context->maj_version, g_gl_context->min_version);
+    o_log_verbose("[OpenGL] Loaded opengl with version %i:%i.", g_gl_context->maj_version, g_gl_context->min_version);
 
     return true;
 }

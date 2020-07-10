@@ -1,5 +1,6 @@
 #include "draw.h"
 #include "opengl.h"
+#include "debug.h"
 
 #define STBRP_STATIC
 #define STB_RECT_PACK_IMPLEMENTATION
@@ -356,20 +357,16 @@ void init_draw(Allocator allocator) {
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     g_imm_renderer->is_initialized = true;
 
-    g_solid_shape_shader->source = (GLchar*)solid_shape_shader_source;
-    g_solid_shape_shader->source_len = (int)str_len(solid_shape_shader_source);
+    g_solid_shape_shader->source = string_from_raw(solid_shape_shader_source);
     if (!init_shader(g_solid_shape_shader)) assert(false);
 
-    g_solid_shape_geometry_shader->source = (GLchar*)solid_shape_geometry_shader_source;
-    g_solid_shape_geometry_shader->source_len = (int)str_len(solid_shape_geometry_shader_source);
+    g_solid_shape_geometry_shader->source = string_from_raw(solid_shape_geometry_shader_source);
     if (!init_shader(g_solid_shape_geometry_shader)) assert(false);
 
-    g_solid_shape_lighting_shader->source = (GLchar*)solid_shape_lighting_shader_source;
-    g_solid_shape_lighting_shader->source_len = (int)str_len(solid_shape_lighting_shader_source);
+    g_solid_shape_lighting_shader->source = string_from_raw(solid_shape_lighting_shader_source);
     if (!init_shader(g_solid_shape_lighting_shader)) assert(false);
 
-    g_font_shader->source = (GLchar*)font_shader_source;
-    g_font_shader->source_len = (int)str_len(font_shader_source);
+    g_font_shader->source = string_from_raw(font_shader_source);
     if (!init_shader(g_font_shader)) assert(false);
 
     set_shader(g_solid_shape_shader);
@@ -377,9 +374,9 @@ void init_draw(Allocator allocator) {
     if (!init_framebuffer(BACK_BUFFER_WIDTH, BACK_BUFFER_HEIGHT, FF_GBuffer, g_back_buffer)) assert(false);
 
     String font_file;
-    if (!read_file_into_string("assets\\fonts\\consola.ttf", &font_file, allocator)) assert(false);
+    if (!read_file_into_string(string_from_raw("assets\\fonts\\consola.ttf"), &font_file, allocator)) assert(false);
 
-    if (!init_font_collection(EXPAND_STRING(font_file), allocator, g_font_collection)) assert(false);
+    if (!init_font_collection(expand_string(font_file), allocator, g_font_collection)) assert(false);
 }
 
 void imm_refresh_transform(void) {
@@ -427,7 +424,7 @@ void imm_flush(void) {
     static b32 thrown_bound_shader_error = false;
     if (!bound_shader) {
         if (!thrown_bound_shader_error) { 
-            printf("[Draw] Tried to flush imm_renderer when no shader was bound. \n");
+            o_log_error("[Draw] Tried to flush imm_renderer when no shader was bound. \n");
             thrown_bound_shader_error = true;
         }
         return;
