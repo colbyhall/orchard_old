@@ -1,5 +1,5 @@
 # Orchard
-A 2D platformer prototype in the works. Could become a game. Leaving public for code examples.
+A prototype "game" in the works. Could become a game. Leaving public for code examples.
 
 ## Features
 * OpenGL Abstraction
