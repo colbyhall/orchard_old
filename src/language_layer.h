@@ -308,6 +308,7 @@ typedef struct Hash_Table {
     Hash_Bucket** bucket_layout;
 
     int pair_count;
+    int pair_cap;
 
     Hash_Table_Func* func;
     Allocator allocator;
@@ -316,7 +317,9 @@ typedef struct Hash_Table {
 Hash_Table _make_hash_table(int key_size, int value_size, Hash_Table_Func* func, Allocator allocator);
 #define make_hash_table(key, value, func, allocator) _make_hash_table(sizeof(key), sizeof(value), func, allocator)
 
-b32 _push_hash_table(Hash_Table* ht, void* key, int key_size, void* value, int value_size);
+void reserve_hash_table(Hash_Table* ht, int reserve_amount);
+
+void* _push_hash_table(Hash_Table* ht, void* key, int key_size, void* value, int value_size);
 #define push_hash_table(ht, key, value) _push_hash_table(ht, &key, sizeof(key), &value, sizeof(value))
 
 void* _find_hash_table(Hash_Table* ht, void* key, int key_size);

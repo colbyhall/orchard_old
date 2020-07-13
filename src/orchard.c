@@ -44,7 +44,7 @@ static void rebuild_hash_table(Hash_Table* ht) {
         bucket->index = i;
         bucket->next = 0;
 
-        const int index = bucket->hash % ht->pair_count;
+        const int index = bucket->hash % ht->pair_cap;
         Hash_Bucket** last = 0;
         Hash_Bucket** slot = ht->bucket_layout + index;
         while (*slot) {
@@ -56,24 +56,53 @@ static void rebuild_hash_table(Hash_Table* ht) {
     }
 }
 
-b32 _push_hash_table(Hash_Table* ht, void* key, int key_size, void* value, int value_size) {
+void* _push_hash_table(Hash_Table* ht, void* key, int key_size, void* value, int value_size) {
     assert(key_size == ht->key_size && value_size == ht->value_size);
 
-    if (_find_hash_table(ht, key, key_size)) return false;
+    void* found = _find_hash_table(ht, key, key_size);
+    if (found) return found;
 
-    ht->keys = mem_realloc(ht->allocator, ht->keys, key_size * (ht->pair_count + 1));
+    if (ht->pair_count == ht->pair_cap) {
+        reserve_hash_table(ht, 1);
+        mem_copy((u8*)ht->keys + key_size * ht->pair_count, key, key_size);
+        mem_copy((u8*)ht->values + value_size * ht->pair_count, value, value_size);
+        ht->pair_count += 1;
+        rebuild_hash_table(ht);
+        return 0;
+    }
+
     mem_copy((u8*)ht->keys + key_size * ht->pair_count, key, key_size);
-    ht->values = mem_realloc(ht->allocator, ht->values, value_size * (ht->pair_count + 1));
     mem_copy((u8*)ht->values + value_size * ht->pair_count, value, value_size);
+
+    Hash_Bucket* const bucket = ht->buckets + ht->pair_count;
+    bucket->hash = ht->func((u8*)ht->keys + key_size * ht->pair_count, 0, key_size);
+    bucket->index = ht->pair_count;
+    bucket->next = 0;
+
+    const int index = bucket->hash % ht->pair_cap;
+    Hash_Bucket** last = 0;
+    Hash_Bucket** slot = ht->bucket_layout + index;
+    while (*slot) {
+        last = slot;
+        slot = &(*slot)->next;
+    }
+    *slot = bucket;
+    if (last) (*last)->next = *slot;
+
     ht->pair_count++;
 
-    ht->buckets = mem_realloc(ht->allocator, ht->buckets, sizeof(Hash_Bucket) * ht->pair_count);
-    ht->bucket_layout = mem_realloc(ht->allocator, ht->bucket_layout, sizeof(Hash_Bucket*) * ht->pair_count);
-    mem_set(ht->bucket_layout, 0, sizeof(Hash_Bucket*) * ht->pair_count);
+    return 0;
+}
 
+void reserve_hash_table(Hash_Table* ht, int reserve_amount) {
+    assert(reserve_amount > 0);
 
-    rebuild_hash_table(ht);
-    return true;
+    ht->pair_cap += reserve_amount; // @TODO(colby): Small alg for best reserve amount
+    ht->keys          = mem_realloc(ht->allocator, ht->keys, ht->key_size * ht->pair_cap);
+    ht->values        = mem_realloc(ht->allocator, ht->values, ht->value_size * ht->pair_cap);
+    ht->buckets       = mem_realloc(ht->allocator, ht->buckets, sizeof(Hash_Bucket) * ht->pair_cap);
+    ht->bucket_layout = mem_realloc(ht->allocator, ht->bucket_layout, sizeof(Hash_Bucket*) * ht->pair_cap);
+    mem_set(ht->bucket_layout, 0, sizeof(Hash_Bucket*) * ht->pair_cap);
 }
 
 void* _find_hash_table(Hash_Table* ht, void* key, int key_size) {
@@ -82,7 +111,7 @@ void* _find_hash_table(Hash_Table* ht, void* key, int key_size) {
     if (!ht->pair_count) return 0;
 
     const u64 hash = ht->func(key, 0, key_size);
-    const int index = hash % ht->pair_count;
+    const int index = hash % ht->pair_cap;
 
     Hash_Bucket* found = ht->bucket_layout[index];
     while (found) {

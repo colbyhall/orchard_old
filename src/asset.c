@@ -88,8 +88,7 @@ static b32 load_mesh(Asset* asset, String file, Allocator asset_memory) {
     int index_count = 0;
 
     Hash_Table vertex_index_table = make_hash_table(Mesh_Vertex, int, hash_mesh_vertex, g_platform->permanent_arena);
-
-    f32 time_messing_with_hash = 0.f;
+    reserve_hash_table(&vertex_index_table, index_cap / 3);
 
     for (int i = 0; i < (int)fast_obj_mesh->group_count; ++i) {
         const fastObjGroup* const group = fast_obj_mesh->groups + i;
@@ -115,14 +114,9 @@ static b32 load_mesh(Asset* asset, String file, Allocator asset_memory) {
                 const f32 time = g_platform->time_in_seconds();
 
                 Mesh_Vertex vertex = { position, normal, uv };
-                if (push_hash_table(&vertex_index_table, vertex, vertex_index_table.pair_count)) {
-                    found_indices[k] = vertex_index_table.pair_count - 1;
-                } else {
-                    int* v_index = find_hash_table(&vertex_index_table, vertex);
-                    found_indices[k] = *v_index;
-                }
-
-                time_messing_with_hash += g_platform->time_in_seconds() - time;
+                int* const found_indice = push_hash_table(&vertex_index_table, vertex, vertex_index_table.pair_count);
+                if (found_indice) found_indices[k] = *found_indice;
+                else found_indices[k] = vertex_index_table.pair_count - 1;
             }
             if (vertex_count == 3) {
                 mem_copy(indices + index_count, found_indices, vertex_count * sizeof(u32));
@@ -142,8 +136,6 @@ static b32 load_mesh(Asset* asset, String file, Allocator asset_memory) {
             index_offset += vertex_count;
         }
     }
-
-    o_log("[Asset] spent %fs messing with hash table", time_messing_with_hash);
 
     mesh->vertices = mem_alloc_array(asset_memory, Mesh_Vertex, vertex_index_table.pair_count);
     mesh->vertex_count = vertex_index_table.pair_count;
