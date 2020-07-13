@@ -12,6 +12,7 @@
 Platform* g_platform;
 
 static b32 is_running = true;
+static LARGE_INTEGER g_qpc_freq;
 
 typedef struct Game_Code {
     HMODULE library;
@@ -233,6 +234,17 @@ static PLATFORM_LOCAL_TIME(win32_local_time) {
     };
 }
 
+static PLATFORM_CYCLES(win32_cycles) {
+    return __rdtsc();
+}
+
+static PLATFORM_TIME_IN_SECONDS(win32_time_in_seconds) {
+    LARGE_INTEGER time;
+    QueryPerformanceCounter(&time);
+
+    return time.QuadPart / (f32)g_qpc_freq.QuadPart;
+}
+
 static LRESULT the_window_proc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam) {
     switch (Msg) {
     case WM_DESTROY:
@@ -334,6 +346,8 @@ int main(int argv, char** argc) {
         SetCurrentDirectoryA("..");
     }
 
+    QueryPerformanceFrequency(&g_qpc_freq);
+
     Platform the_platform = {
         .permanent_arena    = permanent_arena,
         .frame_arena        = frame_arena,
@@ -345,6 +359,8 @@ int main(int argv, char** argc) {
         .find_all_files_in_dir = win32_find_all_files_in_dir,
         .create_directory   = win32_create_directory,
         .local_time         = win32_local_time,
+        .cycles             = win32_cycles,
+        .time_in_seconds    = win32_time_in_seconds,
         .dpi_scale          = 1.f,
     };
 
@@ -429,9 +445,6 @@ int main(int argv, char** argc) {
     game_code_vtable.init_game(g_platform);
     reset_arena(the_platform.frame_arena);
 
-    LARGE_INTEGER qpc_freq;
-    QueryPerformanceFrequency(&qpc_freq);
-
     ShowWindow(the_platform.window_handle, SW_SHOW);
 
     LARGE_INTEGER last_frame_time;
@@ -441,8 +454,8 @@ int main(int argv, char** argc) {
         QueryPerformanceCounter(&current_frame_time);
 
         // Update frame timing
-        g_platform->last_frame_time     = last_frame_time.QuadPart / (f64)qpc_freq.QuadPart;
-        g_platform->current_frame_time  = current_frame_time.QuadPart / (f64)qpc_freq.QuadPart;
+        g_platform->last_frame_time     = last_frame_time.QuadPart / (f64)g_qpc_freq.QuadPart;
+        g_platform->current_frame_time  = current_frame_time.QuadPart / (f64)g_qpc_freq.QuadPart;
         last_frame_time = current_frame_time;
 
         // Reset input state

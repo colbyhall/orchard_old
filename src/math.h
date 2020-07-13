@@ -49,6 +49,8 @@ inline Vector2 v2_lerp(Vector2 a, Vector2 b, f32 t) {
     return v2_add(v2_mul(a, v2s(1.f - t)), v2_mul(b, v2s(t)));
 }
 
+inline b32 v2_equal(Vector2 a, Vector2 b) { return a.x == b.x && a.y == b.y; }
+
 static const Vector2 v2_up     = { 0.f, 1.f };
 static const Vector2 v2_right  = { 1.f, 0.f };
 
@@ -89,10 +91,11 @@ inline Vector3 v3_cross(Vector3 a, Vector3 b) {
         a.x * b.y - a.y * b.x
     );
 }
+inline b32 v3_equal(Vector3 a, Vector3 b) { return a.x == b.x && a.y == b.y && a.z == b.z; }
 
-static const Vector3 v3_up      = { 0.f, 0.f, 1.f };
-static const Vector3 v3_right   = { 0.f, 1.f, 0.f };
 static const Vector3 v3_forward = { 1.f, 0.f, 0.f };
+static const Vector3 v3_right   = { 0.f, 1.f, 0.f };
+static const Vector3 v3_up      = { 0.f, 0.f, 1.f };
 
 typedef union Vector4 {
     struct { f32 x, y, z, w; };
@@ -107,6 +110,30 @@ typedef union Vector4 {
 inline Vector4 v4(f32 x, f32 y, f32 z, f32 w) { return (Vector4) { x, y, z, w }; }
 inline Vector4 v4s(f32 s) { return v4(s, s, s, s); }
 
+typedef union Quaternion {
+    struct { f32 x, y, z, w; };
+    struct { Vector3 xyz; };
+    struct { f32 _padding; Vector3 yzw; };
+} Quaternion;
+
+static const Quaternion quat_identity = { 0.f, 0.f, 0.f, 1.f };
+
+Quaternion quat_from_axis_angle(Vector3 axis, f32 angle_rad);
+Quaternion quat_from_euler_angles(f32 roll, f32 pitch, f32 yaw);
+
+inline f32 quat_len_sq(Quaternion a) { return a.x * a.x + a.y * a.y + a.z * a.z + a.w * a.w; }
+inline f32 quat_len(Quaternion a) { sqrtf(quat_len_sq(a)); }
+
+inline Quaternion quat_norm(Quaternion a) {
+    const f32 scale = 1.f / quat_len(a);
+    return (Quaternion) { a.x * scale, a.y * scale, a.z * scale, a.w * scale };
+}
+
+Vector3 rotate_vector_with_quat(Vector3 a, Quaternion b);
+inline Vector3 quat_forward(Quaternion a) { return rotate_vector_with_quat(v3_forward, a); }
+inline Vector3 quat_right(Quaternion a) { return rotate_vector_with_quat(v3_right, a); }
+inline Vector3 quat_up(Quaternion a) { return rotate_vector_with_quat(v3_up, a); }
+
 typedef union Matrix4 {
     f32 col_row[4][4];
     f32 e[4 * 4];
@@ -117,7 +144,8 @@ Matrix4 m4_identity(void);
 Matrix4 m4_ortho(f32 size, f32 aspect_ratio, f32 far, f32 near);
 Matrix4 m4_persp(f32 fov, f32 asepct_ratio, f32 far, f32 near);
 Matrix4 m4_translate(Vector3 translation);
-// Matrix4 m4_rotate(Vector3 axis, f32 angle);
+Matrix4 m4_rotate(Quaternion rot);
+Matrix4 m4_scale(Vector3 scale);
 
 typedef struct Rect {
     Vector2 min;
@@ -145,6 +173,5 @@ typedef struct Rect_Intersect_Result {
 
 b32 line_intersect_rect(Vector2 a1, Vector2 a2, Rect b, Rect_Intersect_Result* result);
 b32 rect_sweep_rect(Vector2 a1, Vector2 a2, Vector2 size, Rect b, Rect_Intersect_Result* result);
-
 
 #endif /* MATH_H */

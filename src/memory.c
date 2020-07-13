@@ -25,15 +25,18 @@ static void* arena_alloc(Allocator allocator, void* ptr, usize size, usize align
     Memory_Arena* const arena = allocator.data;
 
     if (size) {
-        if (ptr) assert(false); // @Incomplete
-        else {
-            u8* result = arena->base + arena->used;
-            const usize offset = get_alignment_offset(result, alignment);
-            assert(arena->used + size + offset < arena->total);
-            result += offset;
-            arena->used += size + offset;
+        if (ptr) {
+            u8* const result = arena_alloc(allocator, 0, size, alignment);
+            mem_copy(result, ptr, size);
             return result;
         }
+
+        u8* result = arena->base + arena->used;
+        const usize offset = get_alignment_offset(result, alignment);
+        assert(arena->used + size + offset < arena->total);
+        result += offset;
+        arena->used += size + offset;
+        return result;
     }
 
     return 0;

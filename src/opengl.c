@@ -204,6 +204,14 @@ b32 set_uniform_texture(const char* name, Texture2d t) {
     return true;
 }
 
+b32 set_uniform_v4(const char* name, Vector4 v) {
+    Shader_Uniform* const var = find_uniform(name, GL_FLOAT_VEC4);
+    if (!var) return false; 
+
+    glUniform4f(var->location, v.x, v.y, v.z, v.w);
+    return true;
+}
+
 void set_shader(Shader* s) {
     if (!s) {
         glUseProgram(0);

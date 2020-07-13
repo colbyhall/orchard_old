@@ -6,6 +6,6 @@
 #define WINDOW_HEIGHT 720
 
 #define FRAME_MEMORY_CAP gigabyte(1)
-#define PERMANENT_MEMORY_CAP gigabyte(4)
+#define PERMANENT_MEMORY_CAP gigabyte(8)
 
 #endif /* PROGRAM_OPTIONS_H */

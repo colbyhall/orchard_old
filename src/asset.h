@@ -9,6 +9,7 @@ typedef enum Asset_Type {
     AT_Shader,
     AT_Texture2d,
     AT_Font_Collection,
+    AT_Mesh,
     AT_End,
     AT_Count = AT_End - 1,
 } Asset_Type;
@@ -21,6 +22,7 @@ typedef struct Asset {
         Shader          shader;
         Texture2d       texture2d;
         Font_Collection font_collection;
+        Mesh            mesh;
     };
 } Asset;
 
@@ -41,6 +43,12 @@ inline Texture2d* find_texture2d(String path) {
 inline Font_Collection* find_font_collection(String path) { 
     Asset* const found = find_asset(path);
     if (found && found->type == AT_Font_Collection) return &found->font_collection;
+    return 0;
+}
+
+inline Mesh* find_mesh(String path) { 
+    Asset* const found = find_asset(path);
+    if (found && found->type == AT_Mesh) return &found->mesh;
     return 0;
 }
 

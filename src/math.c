@@ -1,5 +1,35 @@
 #include "math.h"
 
+Quaternion quat_from_axis_angle(Vector3 axis, f32 angle_rad) {
+    angle_rad *= 0.5f;
+    const f32 s = sinf(angle_rad);
+    const f32 c = cosf(angle_rad);
+    return (Quaternion) { s * axis.x, s * axis.y, s * axis.z, c };
+}
+
+Quaternion quat_from_euler_angles(f32 roll, f32 pitch, f32 yaw) {
+    const f32 cr = cosf(roll * 0.5f);
+    const f32 sr = sinf(roll * 0.5f);
+
+    const f32 cp = cosf(pitch * 0.5f);
+    const f32 sp = sinf(pitch * 0.5f);
+
+    const f32 cy = cosf(yaw * 0.5f);
+    const f32 sy = sinf(yaw * 0.5f);
+
+    return (Quaternion) { 
+        sr * cp * cy - cr * sp * sy,
+        cr * sp * cy + sr * cp * sy,
+        cr * cp * sy - sr * sp * cy,
+        cr * cp * cy + sr * sp * sy,
+    };
+}   
+
+Vector3 rotate_vector_with_quat(Vector3 a, Quaternion b) {
+    const Vector3 t = v3_mul(v3_cross(b.xyz, a), v3s(2.f));
+    return v3_add(v3_add(a, v3_mul(t, v3s(b.w))), v3_cross(b.xyz, t));
+}
+
 Matrix4 m4_mul(Matrix4 a, Matrix4 b) {
     Matrix4 result;
     for (u32 y = 0; y < 4; ++y) {
@@ -62,32 +92,43 @@ Matrix4 m4_translate(Vector3 translation) {
     return result;
 }
 
-
-/*
-Matrix4 m4_rotate(Vector3 axis, f32 angle) {
+Matrix4 m4_rotate(Quaternion rot) {
     Matrix4 result = m4_identity();
-    const f32 r = angle * TO_RAD;
-    const f32 c = cosf(r);
-    const f32 s = sinf(r);
-    const f32 omc = 1.f - c;
 
-    const f32 x = axis.x;
-    const f32 y = axis.y;
-    const f32 z = axis.z;
+    const f32 xx = rot.x * rot.x;
+    const f32 xy = rot.x * rot.y;
+    const f32 xz = rot.x * rot.z;
+    const f32 xw = rot.x * rot.w;
 
-    result.e[0 + 0 * 4] = x * omc + c;
-    result.e[1 + 0 * 4] = y * x * omc + z * s;
-    result.e[2 + 0 * 4] = x * z * omc - y * s;
-    result.e[0 + 1 * 4] = x * y * omc - z * s;
-    result.e[1 + 1 * 4] = y * omc + c;
-    result.e[2 + 1 * 4] = y * z * omc + x * s;
-    result.e[0 + 2 * 4] = x * z * omc + y * s;
-    result.e[1 + 2 * 4] = y * z * omc - x * s;
-    result.e[2 + 2 * 4] = z * omc + c;
+    const f32 yy = rot.y * rot.y;
+    const f32 yz = rot.y * rot.z;
+    const f32 yw = rot.y * rot.w;
+
+    const f32 zz = rot.z * rot.z;
+    const f32 zw = rot.z * rot.w;
+
+    result.col_row[0][0] = 1.f - 2.f * (yy + zz);
+    result.col_row[1][0] = 2.f * (xy - zw);
+    result.col_row[2][0] = 2.f * (xz + yw);
+
+    result.col_row[0][1] = 2.f * (xy + zw);
+    result.col_row[1][1] = 1.f - 2.f * (xx + zz);
+    result.col_row[2][1] = 2.f * (yz - xw);
+
+    result.col_row[0][2] = 2.f * (xz - yw);
+    result.col_row[1][2] = 2.f * (yz + xw);
+    result.col_row[2][2] = 1.f - 2.f * (xx + yy);
 
     return result;
 }
-*/
+
+Matrix4 m4_scale(Vector3 scale) {
+    Matrix4 result = m4_identity();
+    result.col_row[0][0] = scale.x;
+    result.col_row[1][1] = scale.y;
+    result.col_row[2][2] = scale.z;
+    return result;
+}
 
 b32 rect_overlaps_rect(Rect a, Rect b, Rect* overlap) {
     if (overlap) {

@@ -27,11 +27,92 @@
 
 Platform* g_platform = 0;
 
+Hash_Table _make_hash_table(int key_size, int value_size, Hash_Table_Func* func, Allocator allocator) {
+    assert(func);
+    return (Hash_Table) { 
+        .key_size = key_size, 
+        .value_size = value_size, 
+        .func = func, 
+        .allocator = allocator
+    };
+}
+
+static void rebuild_hash_table(Hash_Table* ht) {
+    for (int i = 0; i < ht->pair_count; ++i) {
+        Hash_Bucket* const bucket = ht->buckets + i;
+        bucket->hash = ht->func((u8*)ht->keys + ht->key_size * i, 0, ht->key_size);
+        bucket->index = i;
+        bucket->next = 0;
+
+        const int index = bucket->hash % ht->pair_count;
+        Hash_Bucket** last = 0;
+        Hash_Bucket** slot = ht->bucket_layout + index;
+        while (*slot) {
+            last = slot;
+            slot = &(*slot)->next;
+        }
+        *slot = bucket;
+        if (last) (*last)->next = *slot;
+    }
+}
+
+b32 _push_hash_table(Hash_Table* ht, void* key, int key_size, void* value, int value_size) {
+    assert(key_size == ht->key_size && value_size == ht->value_size);
+
+    if (_find_hash_table(ht, key, key_size)) return false;
+
+    ht->keys = mem_realloc(ht->allocator, ht->keys, key_size * (ht->pair_count + 1));
+    mem_copy((u8*)ht->keys + key_size * ht->pair_count, key, key_size);
+    ht->values = mem_realloc(ht->allocator, ht->values, value_size * (ht->pair_count + 1));
+    mem_copy((u8*)ht->values + value_size * ht->pair_count, value, value_size);
+    ht->pair_count++;
+
+    ht->buckets = mem_realloc(ht->allocator, ht->buckets, sizeof(Hash_Bucket) * ht->pair_count);
+    ht->bucket_layout = mem_realloc(ht->allocator, ht->bucket_layout, sizeof(Hash_Bucket*) * ht->pair_count);
+    mem_set(ht->bucket_layout, 0, sizeof(Hash_Bucket*) * ht->pair_count);
+
+
+    rebuild_hash_table(ht);
+    return true;
+}
+
+void* _find_hash_table(Hash_Table* ht, void* key, int key_size) {
+    assert(key_size == ht->key_size);
+
+    if (!ht->pair_count) return 0;
+
+    const u64 hash = ht->func(key, 0, key_size);
+    const int index = hash % ht->pair_count;
+
+    Hash_Bucket* found = ht->bucket_layout[index];
+    while (found) {
+        const u64 my_hash = found->hash;
+        if (my_hash == hash) { // @TEMP } && ht->func(key, (u8*)ht->keys + found->index * key_size, key_size)) {
+            return (u8*)ht->values + ht->value_size * found->index;
+        }
+        found = found->next;
+    }
+
+    return 0;
+}
+
+u64 hash_string(void* a, void* b, int size) {
+    assert(size == sizeof(String));
+
+    String* const s_a = a;
+    String* const s_b = b;
+
+    if (b) return string_equal(*s_a, *s_b);
+
+    return fnv1_hash(s_a->data, s_a->len);
+}
+
 typedef int Entity_Id;
 
 typedef enum Entity_Type {
     ET_Character,
-    ET_Static_Object
+    ET_Static_Object,
+    ET_Rope,
 } Entity_Type;
 
 enum Entity_Flags {
@@ -58,13 +139,17 @@ typedef struct Entity {
         struct {
             Vector3 color;
         };
+        // ET_Rope 
+        struct {
+            Vector2 end_pos;
+        };
     };
 } Entity;
 
-#define entity_count_CAP 256
+#define ENTITY_CAP 256
 typedef struct Entity_Manager {
-    Entity entity_count[entity_count_CAP];
-    int num_entity_count;
+    Entity entities[ENTITY_CAP];
+    int entity_count;
 
     Entity_Id last_id;
 } Entity_Manager;
@@ -76,8 +161,8 @@ typedef struct Entity_Iterator {
 } Entity_Iterator;
 
 static Entity_Iterator make_entity_iterator(Entity_Manager* manager) {
-    for (int i = 0; i < entity_count_CAP; ++i) {
-        Entity* const e = &manager->entity_count[i];
+    for (int i = 0; i < ENTITY_CAP; ++i) {
+        Entity* const e = &manager->entities[i];
 
         if ((e->flags & EF_Active) == 0) continue;
 
@@ -90,17 +175,17 @@ static Entity_Iterator make_entity_iterator(Entity_Manager* manager) {
 static b32 can_step_entity_iterator(Entity_Iterator iter) {
     return (
         iter.manager != 0 && 
-        iter.index < iter.manager->num_entity_count && 
-        iter.found_entity_count < iter.manager->num_entity_count
+        iter.index < iter.manager->entity_count && 
+        iter.found_entity_count < iter.manager->entity_count
     );
 }
 
 static void step_entity_iterator(Entity_Iterator* iter) {
     iter->found_entity_count++;
-    if (iter->found_entity_count == iter->manager->num_entity_count) return;
+    if (iter->found_entity_count == iter->manager->entity_count) return;
 
-    for (int i = iter->index + 1; i < entity_count_CAP; ++i) {
-        Entity* const e = &iter->manager->entity_count[i];
+    for (int i = iter->index + 1; i < ENTITY_CAP; ++i) {
+        Entity* const e = &iter->manager->entities[i];
 
         if ((e->flags & EF_Active) == 0) continue;
 
@@ -112,21 +197,21 @@ static void step_entity_iterator(Entity_Iterator* iter) {
 #define entity_iterator(em) Entity_Iterator iter = make_entity_iterator(em); can_step_entity_iterator(iter); step_entity_iterator(&iter)
 
 static Entity* get_entity_from_iterator(Entity_Iterator iter) {
-    return &iter.manager->entity_count[iter.index];
+    return &iter.manager->entities[iter.index];
 }
 
 static Entity* push_entity(Entity_Manager* manager, Entity_Type type) {
-    if (manager->num_entity_count == entity_count_CAP) return 0;
+    if (manager->entity_count == ENTITY_CAP) return 0;
 
-    for (int i = 0; i < entity_count_CAP; ++i) {
-        Entity* const e = &manager->entity_count[i];
+    for (int i = 0; i < ENTITY_CAP; ++i) {
+        Entity* const e = &manager->entities[i];
         if ((e->flags & EF_Active) != 0) continue;
 
         *e = (Entity) { 0 };
         e->id = ++manager->last_id;
         e->type = type;
         e->flags = EF_Active;
-        manager->num_entity_count++;
+        manager->entity_count++;
         return e;
     }
 
@@ -146,7 +231,7 @@ static b32 pop_entity(Entity_Manager* manager, Entity_Id id) {
     Entity* const e = find_entity(manager, id);
     if (e == 0) return false;
     *e = (Entity) { 0 };
-    manager->num_entity_count--;
+    manager->entity_count--;
     return true;
 }
 
@@ -155,7 +240,8 @@ macro(ET_Character, tick_character)
 
 #define ENTITY_DRAW(macro) \
 macro(ET_Character, draw_character) \
-macro(ET_Static_Object, draw_static_object)
+macro(ET_Static_Object, draw_static_object) \
+macro(ET_Rope, draw_rope)
 
 #define METER 32.f
 #define GRAVITY_CONSTANT (-9.8f * METER)
@@ -165,6 +251,8 @@ typedef struct Game_State {
 
     Vector2 current_cam_pos;
     Vector2 target_cam_pos;
+
+    f32 plane_rot;
 
     b32 is_initialized;
 } Game_State;
@@ -269,7 +357,7 @@ static void tick_character(Entity* e, f32 dt) {
         e->position.xy = new_position;
     }
 
-    g_game_state->target_cam_pos = v2_add(e->position.xy, v2(0.f, METER));
+    // g_game_state->target_cam_pos = v2_add(e->position.xy, v2(0.f, METER));
 }
 
 static Texture2d* g_character_texture;
@@ -291,6 +379,14 @@ static void draw_static_object(Entity* e) {
     imm_flush();
 }
 
+static void draw_rope(Entity* e) {
+    imm_begin();
+    const Vector2 a1 = e->position.xy;
+    const Vector2 a2 = e->end_pos;
+    imm_line(a1, a2, -5.f, 1.f, v4s(1.f));
+    imm_flush();
+}
+
 DLL_EXPORT void init_game(Platform* platform) {
     g_platform = platform;
 
@@ -307,7 +403,7 @@ DLL_EXPORT void init_game(Platform* platform) {
         
         Entity* const ground = push_entity(em, ET_Static_Object);
         ground->bounds = v2(100000.f, METER);
-        ground->position.y = -8.f * METER;
+        ground->position.y = -4.f * METER;
         ground->color = v3(0.f, 0.7f, 0.2f);
 
         Entity* const box = push_entity(em, ET_Static_Object);
@@ -318,12 +414,17 @@ DLL_EXPORT void init_game(Platform* platform) {
         Entity* const player = push_entity(em, ET_Character);
         player->bounds = v2(METER, 2 * METER);
 
-
         g_game_state->is_initialized = true;
     }
 }
 
 DLL_EXPORT void tick_game(f32 dt) {
+    g_game_state->current_cam_pos = v2_lerp(
+        g_game_state->current_cam_pos, 
+        g_game_state->target_cam_pos,
+        dt * 2.f
+    );
+
     Entity_Manager* const em = &g_game_state->entity_manager;
     for (entity_iterator(em)) {
         Entity* const e = get_entity_from_iterator(iter);
@@ -335,15 +436,9 @@ DLL_EXPORT void tick_game(f32 dt) {
         };
     }
 
-    g_game_state->current_cam_pos = v2_lerp(
-        g_game_state->current_cam_pos, 
-        g_game_state->target_cam_pos,
-        dt * 2.f
-    );
-
     begin_draw();
     {
-        imm_render_from(v3xy(g_game_state->current_cam_pos, 0.f));
+        imm_draw_from(v3xy(g_game_state->current_cam_pos, 0.f));
 
         for (entity_iterator(em)) {
             Entity* const e = get_entity_from_iterator(iter);
@@ -354,6 +449,17 @@ DLL_EXPORT void tick_game(f32 dt) {
 #undef DRAW_entity_count
             };
         }
+
+        g_game_state->plane_rot += dt;
+
+        const Quaternion rot = quat_from_axis_angle(v3(0.f, 1.f, 0.f), g_game_state->plane_rot);
+
+        Mesh* const mesh = find_mesh(string_from_raw("assets/meshes/sphere"));
+        Shader* const shader = find_shader(string_from_raw("assets/shaders/solid_color_geometry"));
+        set_shader(shader);
+
+        imm_draw_persp(v3z());
+        draw_mesh(mesh, v3(0.f, 0.f, -10.f), rot, v3s(1.f));
     }
     end_draw();
 
@@ -361,7 +467,7 @@ DLL_EXPORT void tick_game(f32 dt) {
     {
         set_shader(g_font_shader);
         const Rect viewport = { v2z(), v2((f32)g_platform->window_width, (f32)g_platform->window_height) };
-        imm_render_right_handed(viewport);
+        imm_draw_right_handed(viewport);
 
         Font* const the_font = font_at_size(g_font_collection, (int)(32.f * g_platform->dpi_scale));
         set_uniform_texture("atlas", the_font->atlas);

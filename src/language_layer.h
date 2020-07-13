@@ -160,7 +160,8 @@ inline void _assert_implementation(b32 cond, b32 do_segfault, u32 line, const ch
 // @NOTE(colby): Maybe one day we wont use the cruntime
 #define mem_copy    memcpy
 #define mem_move    memmove
-#define str_len     strlen
+#define mem_set     memset
+#define str_len     (int)strlen
 #define str_cmp     strcmp
 
 typedef struct Allocator {
@@ -178,6 +179,14 @@ inline void* mem_alloc(Allocator allocator, usize size) {
 
 #define mem_alloc_struct(allocator, type) mem_alloc(allocator, sizeof(type))
 #define mem_alloc_array(allocator, type, count) mem_alloc(allocator, sizeof(type) * count)
+
+inline void* mem_realloc_aligned(Allocator allocator, void* ptr, usize size, usize alignment) {
+    return allocator.proc(allocator, ptr, size, alignment);
+}
+
+inline void* mem_realloc(Allocator allocator, void* ptr, usize size) {
+    return allocator.proc(allocator, ptr, size, 4);
+}
 
 inline void mem_free(Allocator allocator, void* ptr) {
     allocator.proc(allocator, ptr, 0, 0);
@@ -263,5 +272,54 @@ int find_from_left(String the_string, Rune r);
 b32 string_equal(String a, String b);
 String copy_string(String a, Allocator allocator);
 b32 starts_with(String a, String b);
+
+#define FNV_OFFSET_BASIC 0xcbf29ce484222325
+#define FNV_PRIME 0x100000001b3
+
+inline u64 fnv1_hash(const void* s, usize size) {
+    u64 hash = FNV_OFFSET_BASIC;
+    const u8* const casted_s = s;
+    for (usize i = 0; i < size; ++i) {
+        hash *= FNV_PRIME;
+        hash = hash ^ casted_s[i];
+    }
+    return hash;
+}
+
+typedef struct Hash_Bucket {
+    u64 hash;
+    int index;
+
+    struct Hash_Bucket* next;
+} Hash_Bucket;
+
+typedef u64 (Hash_Table_Func)(void* a, void* b, int size);
+
+u64 hash_string(void* a, void* b, int size);
+
+typedef struct Hash_Table {
+    void* keys;
+    int key_size;
+    
+    void* values;
+    int value_size;
+
+    Hash_Bucket* buckets;
+    Hash_Bucket** bucket_layout;
+
+    int pair_count;
+
+    Hash_Table_Func* func;
+    Allocator allocator;
+} Hash_Table;
+
+Hash_Table _make_hash_table(int key_size, int value_size, Hash_Table_Func* func, Allocator allocator);
+#define make_hash_table(key, value, func, allocator) _make_hash_table(sizeof(key), sizeof(value), func, allocator)
+
+b32 _push_hash_table(Hash_Table* ht, void* key, int key_size, void* value, int value_size);
+#define push_hash_table(ht, key, value) _push_hash_table(ht, &key, sizeof(key), &value, sizeof(value))
+
+void* _find_hash_table(Hash_Table* ht, void* key, int key_size);
+#define find_hash_table(ht, key) _find_hash_table(ht, &key, sizeof(key))
 
 #endif /* LANGUAGE_LAYER_H */

@@ -1,6 +1,7 @@
 #include "draw.h"
 #include "opengl.h"
 #include "debug.h"
+#include "asset.h"
 
 #define STBRP_STATIC
 #define STB_RECT_PACK_IMPLEMENTATION
@@ -9,6 +10,48 @@
 #define STB_IMAGE_STATIC
 #define STB_TRUETYPE_IMPLEMENTATION
 #include <stb/stb_truetype.h>
+
+b32 upload_mesh(Mesh* m) {
+    glGenVertexArrays(1, &m->vao);
+    glBindVertexArray(m->vao);
+
+    glGenBuffers(2, &m->vbo);
+    glBindBuffer(GL_ARRAY_BUFFER, m->vbo);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(Mesh_Vertex) * m->vertex_count, m->vertices, GL_STATIC_DRAW);
+
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m->vio);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, m->index_count * sizeof(u32), m->indices, GL_STATIC_DRAW);
+
+    return true;
+}
+
+void draw_mesh(Mesh* m, Vector3 position, Quaternion rotation, Vector3 scale) {
+    Matrix4 model = m4_mul(m4_mul(m4_translate(position), m4_rotate(rotation)), m4_scale(scale));
+    set_uniform_m4("model", model);
+    set_uniform_v4("color", v4s(1.f));
+
+    glBindVertexArray(m->vao);
+    glBindBuffer(GL_ARRAY_BUFFER, m->vbo);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m->vio);
+
+    set_mesh_vertex_format();
+
+    glDrawElements(GL_TRIANGLES, m->index_count, GL_UNSIGNED_INT, 0);
+}
+
+void set_mesh_vertex_format(void) {
+    const GLuint position_loc = 0;
+    glVertexAttribPointer(position_loc, 3, GL_FLOAT, GL_FALSE, sizeof(Mesh_Vertex), 0);
+    glEnableVertexAttribArray(position_loc);
+    
+    const GLuint normal_loc = 1;
+    glVertexAttribPointer(normal_loc, 3, GL_FLOAT, GL_FALSE, sizeof(Mesh_Vertex), (void*)sizeof(Vector3));
+    glEnableVertexAttribArray(normal_loc);
+
+    const GLuint uv_loc = 2;
+    glVertexAttribPointer(uv_loc, 2, GL_FLOAT, GL_FALSE, sizeof(Mesh_Vertex), (void*)(sizeof(Vector3) + sizeof(Vector3)));
+    glEnableVertexAttribArray(uv_loc);
+}
 
 b32 init_font_collection(u8* data, int len, Allocator asset_memory, Font_Collection* collection) {
     *collection = (Font_Collection) { 0 };
@@ -195,142 +238,16 @@ Shader* g_font_shader = 0;
 #define FAR_CLIP_PLANE 1000.f
 #define NEAR_CLIP_PLANE 0.1
 
-const char* solid_shape_geometry_shader_source = 
-"#ifdef VERTEX\n\
-layout(location = 0) in vec3 position;\n\
-layout(location = 1) in vec3 normal;\n\
-layout(location = 2) in vec2 uv;\n\
-layout(location = 3) in vec4 color;\n\
-uniform mat4 projection;\n\
-uniform mat4 view;\n\
-out vec4 frag_color;\n\
-out vec3 frag_normal;\n\
-out vec3 frag_position;\n\
-out vec2 frag_uv;\n\
-void main() {\n\
-    gl_Position =  projection * view * vec4(position, 1.0);\n\
-    frag_color = color;\n\
-    frag_normal = normal;\n\
-    frag_position = gl_Position.xyz;\n\
-    frag_uv = uv;\n\
-}\n\
-#endif\n\
-#ifdef FRAGMENT\n\
-layout (location = 0) out vec4 diffuse;\n\
-layout (location = 1) out vec3 normal;\n\
-layout (location = 2) out vec3 position;\n\
-in vec4 frag_color;\n\
-in vec3 frag_normal;\n\
-in vec3 frag_position;\n\
-in vec2 frag_uv;\n\
-\n\
-uniform sampler2D diffuse_tex;\n\
-\n\
-void main() {\n\
-    if (frag_uv.x < 0.0) {\n\
-        diffuse = frag_color;\n\
-    } else {\n\
-        diffuse = texture(diffuse_tex, frag_uv);\n\
-    }\n\
-    normal = frag_normal;\n\
-    position = frag_position;\n\
-}\n\
-#endif\n";
-
-const char* solid_shape_lighting_shader_source = 
-"#ifdef VERTEX\n\
-layout(location = 0) in vec3 position;\n\
-layout(location = 1) in vec3 normal;\n\
-layout(location = 2) in vec2 uv;\n\
-layout(location = 3) in vec4 color;\n\
-uniform mat4 projection;\n\
-uniform mat4 view;\n\
-out vec2 frag_uv;\n\
-void main() {\n\
-    gl_Position =  projection * view * vec4(position, 1.0);\n\
-    frag_uv = uv;\n\
-}\n\
-#endif\n\
-#ifdef FRAGMENT\n\
-out vec4 frag_color;\n\
-in vec2 frag_uv;\n\
-\n\
-uniform sampler2D diffuse_tex;\n\
-\n\
-void main() {\n\
-    frag_color = texture(diffuse_tex, frag_uv);\n\
-}\n\
-#endif\n";
-
-const char* solid_shape_shader_source = 
-"#ifdef VERTEX\n\
-layout(location = 0) in vec3 position;\n\
-layout(location = 1) in vec3 normal;\n\
-layout(location = 2) in vec2 uv;\n\
-layout(location = 3) in vec4 color;\n\
-uniform mat4 projection;\n\
-uniform mat4 view;\n\
-out vec4 out_color;\n\
-out vec2 out_uv;\n\
-void main() {\n\
-    gl_Position =  projection * view * vec4(position, 1.0);\n\
-    out_color = color;\n\
-    out_uv = uv;\n\
-}\n\
-#endif\n\
-#ifdef FRAGMENT\n\
-out vec4 frag_color;\n\
-in vec4 out_color;\n\
-in vec2 out_uv;\n\
-\n\
-uniform sampler2D tex;\n\
-\n\
-void main() {\n\
-    if (out_uv.x < 0.0) {\n\
-        frag_color = out_color;\n\
-    } else {\n\
-        frag_color = texture(tex, out_uv);\n\
-    }\n\
-}\n\
-#endif\n";
-
-const char* font_shader_source = 
-"#ifdef VERTEX\n\
-layout(location = 0) in vec3 position;\n\
-layout(location = 1) in vec3 normal;\n\
-layout(location = 2) in vec2 uv;\n\
-layout(location = 3) in vec4 color;\n\
-uniform mat4 projection;\n\
-uniform mat4 view;\n\
-out vec4 frag_color;\n\
-out vec2 frag_uv;\n\
-void main() {\n\
-    gl_Position =  projection * view * vec4(position, 1.0);\n\
-    frag_color = color;\n\
-    frag_uv = uv;\n\
-}\n\
-#endif\n\
-#ifdef FRAGMENT\n\
-out vec4 final_color;\n\
-in vec4 frag_color;\n\
-in vec2 frag_uv;\n\
-\n\
-uniform sampler2D atlas;\n\
-\n\
-void main() {\n\
-    vec4 sample = texture(atlas, frag_uv);\n\
-    final_color = vec4(frag_color.xyz, sample.r);\n\
-}\n\
-#endif\n";
 
 void init_draw(Allocator allocator) {
     g_imm_renderer      = mem_alloc_struct(allocator, Immediate_Renderer);
-    g_solid_shape_shader  = mem_alloc_struct(allocator, Shader);
-    g_solid_shape_geometry_shader = mem_alloc_struct(allocator, Shader);
-    g_solid_shape_lighting_shader = mem_alloc_struct(allocator, Shader);
-    g_font_shader = mem_alloc_struct(allocator, Shader);
-    g_back_buffer = mem_alloc_struct(allocator, Framebuffer);
-    g_font_collection = mem_alloc_struct(allocator, Font_Collection);
+    g_back_buffer       = mem_alloc_struct(allocator, Framebuffer);
+    g_font_collection   = mem_alloc_struct(allocator, Font_Collection);
+
+    g_solid_shape_shader = find_shader(string_from_raw("assets/shaders/solid_shape_forward"));
+    g_solid_shape_geometry_shader = find_shader(string_from_raw("assets/shaders/solid_shape_geometry"));
+    g_solid_shape_lighting_shader = find_shader(string_from_raw("assets/shaders/solid_shape_lighting"));
+    g_font_shader = find_shader(string_from_raw("assets/shaders/font"));
 
     if (g_imm_renderer->is_initialized) return;
 
@@ -357,18 +274,6 @@ void init_draw(Allocator allocator) {
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     g_imm_renderer->is_initialized = true;
 
-    g_solid_shape_shader->source = string_from_raw(solid_shape_shader_source);
-    if (!init_shader(g_solid_shape_shader)) assert(false);
-
-    g_solid_shape_geometry_shader->source = string_from_raw(solid_shape_geometry_shader_source);
-    if (!init_shader(g_solid_shape_geometry_shader)) assert(false);
-
-    g_solid_shape_lighting_shader->source = string_from_raw(solid_shape_lighting_shader_source);
-    if (!init_shader(g_solid_shape_lighting_shader)) assert(false);
-
-    g_font_shader->source = string_from_raw(font_shader_source);
-    if (!init_shader(g_font_shader)) assert(false);
-
     set_shader(g_solid_shape_shader);
 
     if (!init_framebuffer(BACK_BUFFER_WIDTH, BACK_BUFFER_HEIGHT, FF_GBuffer, g_back_buffer)) assert(false);
@@ -384,7 +289,7 @@ void imm_refresh_transform(void) {
     set_uniform_m4("projection",   g_imm_renderer->projection);
 }
 
-void imm_render_right_handed(Rect viewport) {
+void imm_draw_right_handed(Rect viewport) {
     const Vector2 draw_size = rect_size(viewport);
     const f32 aspect_ratio = draw_size.width / draw_size.height;
     const f32 ortho_size = draw_size.height / 2.f;
@@ -395,14 +300,14 @@ void imm_render_right_handed(Rect viewport) {
     imm_refresh_transform();
 }
 
-void imm_render_ortho(Vector3 pos, f32 aspect_ratio, f32 ortho_size) {
+void imm_draw_ortho(Vector3 pos, f32 aspect_ratio, f32 ortho_size) {
     g_imm_renderer->projection = m4_ortho(ortho_size, aspect_ratio, FAR_CLIP_PLANE, NEAR_CLIP_PLANE);
     g_imm_renderer->view = m4_translate(v3_negate(pos));
 
     imm_refresh_transform();
 }
 
-void imm_render_from(Vector3 pos) {
+void imm_draw_from(Vector3 pos) {
     pos.x = roundf(pos.x);
     pos.y = roundf(pos.y);
     pos.z = roundf(pos.z);
@@ -413,6 +318,18 @@ void imm_render_from(Vector3 pos) {
     g_imm_renderer->view = m4_translate(v3_negate(pos));    
 
     imm_refresh_transform();
+}
+
+void imm_draw_persp(Vector3 pos) {
+    pos.x = roundf(pos.x);
+    pos.y = roundf(pos.y);
+    pos.z = roundf(pos.z);
+
+    const f32 aspect_ratio = (f32)BACK_BUFFER_WIDTH / (f32)BACK_BUFFER_HEIGHT;
+    g_imm_renderer->projection = m4_persp(90.f, aspect_ratio, FAR_CLIP_PLANE, NEAR_CLIP_PLANE);
+    g_imm_renderer->view = m4_translate(v3_negate(pos));
+
+    imm_refresh_transform();   
 }
 
 void imm_begin(void) {
@@ -435,6 +352,12 @@ void imm_flush(void) {
     glBindBuffer(GL_ARRAY_BUFFER, g_imm_renderer->vbo);
     glBufferData(GL_ARRAY_BUFFER, sizeof(g_imm_renderer->vertices[0]) * g_imm_renderer->vertex_count, g_imm_renderer->vertices, GL_STREAM_DRAW);
 
+    set_imm_vertex_format();
+    
+    glDrawArrays(GL_TRIANGLES, 0, g_imm_renderer->vertex_count);
+}
+
+void set_imm_vertex_format(void) {
     const GLuint position_loc = 0;
     glVertexAttribPointer(position_loc, 3, GL_FLOAT, GL_FALSE, sizeof(Immediate_Vertex), 0);
     glEnableVertexAttribArray(position_loc);
@@ -450,15 +373,6 @@ void imm_flush(void) {
     const GLuint color_loc = 3;
     glVertexAttribPointer(color_loc, 4, GL_FLOAT, GL_FALSE, sizeof(Immediate_Vertex), (void*)(sizeof(Vector3) + sizeof(Vector3) + sizeof(Vector2)));
     glEnableVertexAttribArray(color_loc);
-    
-    glDrawArrays(GL_TRIANGLES, 0, g_imm_renderer->vertex_count);
-
-    glDisableVertexAttribArray(position_loc);
-    glDisableVertexAttribArray(normal_loc);
-    glDisableVertexAttribArray(uv_loc);
-    glDisableVertexAttribArray(color_loc);
-
-    glBindVertexArray(0);
 }
 
 void begin_draw(void) {
@@ -480,7 +394,7 @@ void end_draw(void) {
     const f32 viewport_aspect_ratio = viewport.max.width / viewport.max.height;
     const f32 back_buffer_aspect_ratio = (f32)BACK_BUFFER_WIDTH / (f32)BACK_BUFFER_HEIGHT;
 
-    imm_render_ortho(v3z(), viewport_aspect_ratio, viewport.max.height / 2.f);
+    imm_draw_ortho(v3z(), viewport_aspect_ratio, viewport.max.height / 2.f);
 
     Rect draw_rect;
     if (viewport_aspect_ratio >= back_buffer_aspect_ratio) {
@@ -668,4 +582,34 @@ void imm_string(String str, Font* font, f32 max_width, Vector2 xy, f32 z, Vector
         } break;
         }
     }
+}
+
+void imm_textured_plane(Vector3 pos, Quaternion rot, Rect rect, Vector2 uv0, Vector2 uv1, Vector4 color) {
+    Vector3 right = quat_right(rot);
+    Vector3 up    = quat_up(rot);
+
+    const Vector3 left = v3_mul(right, v3s(rect.min.x));
+    const Vector3 down = v3_mul(up, v3s(rect.min.y));
+    right = v3_mul(right, v3s(rect.max.x));
+    up    = v3_mul(up, v3s(rect.max.y));
+
+    const Vector3 top_left_pos      = v3_add(pos, v3_add(up, left));
+    const Vector3 top_right_pos     = v3_add(pos, v3_add(up, right));
+    const Vector3 bottom_left_pos   = v3_add(pos, v3_add(down, left));
+    const Vector3 bottom_right_pos  = v3_add(pos, v3_add(down, right));
+
+    const Vector2 top_left_uv       = v2(uv0.x, uv1.y);
+    const Vector2 top_right_uv      = v2(uv1.x, uv1.y);
+    const Vector2 bottom_left_uv    = v2(uv0.x, uv0.y);
+    const Vector2 bottom_right_uv   = v2(uv1.x, uv0.y);
+
+    const Vector3 normal = v3s(0.f); // @Incomplete
+
+    imm_vertex(top_left_pos, normal, top_left_uv, color);
+    imm_vertex(bottom_left_pos, normal, bottom_left_uv, color);
+    imm_vertex(top_right_pos, normal, top_right_uv, color);
+
+    imm_vertex(bottom_left_pos, normal, bottom_left_uv, color);
+    imm_vertex(bottom_right_pos, normal, bottom_right_uv, color);
+    imm_vertex(top_right_pos, normal, top_right_uv, color);
 }
