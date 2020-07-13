@@ -18,7 +18,7 @@ void main() {
     gl_Position = projection * view * model * vec4(position, 1.0);
 
     frag_color = color;
-    frag_normal = normalize((model * vec4(normal, 0.0)).xyz);
+    frag_normal = mat3(transpose(inverse(model))) * normal; // normalize((model * vec4(normal, 0.0)).xyz);
     frag_position = gl_Position.xyz;
     frag_uv = uv;
 }
