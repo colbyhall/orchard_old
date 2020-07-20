@@ -189,4 +189,10 @@ typedef struct Rect_Intersect_Result {
 b32 line_intersect_rect(Vector2 a1, Vector2 a2, Rect b, Rect_Intersect_Result* result);
 b32 rect_sweep_rect(Vector2 a1, Vector2 a2, Vector2 size, Rect b, Rect_Intersect_Result* result);
 
+typedef struct Random_Seed {
+    u64 seed;
+} Random_Seed;
+
+f32 perlin_get_2d(Random_Seed seed, f32 x, f32 y, f32 freq, int depth);
+
 #endif /* MATH_H */

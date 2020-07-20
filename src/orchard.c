@@ -139,8 +139,10 @@ u64 hash_string(void* a, void* b, int size) {
 
 static Game_State* g_game_state;
 
-static void regen_map(Entity_Manager* em, u64 seed) {
-    *em = (Entity_Manager) { 0 };
+static void regen_map(Entity_Manager* em, Random_Seed seed) {
+    // *em = (Entity_Manager) { 0 };
+
+    o_log("[Game] Generating map with seed %llu", seed.seed);
 
     const int chunk_cap_sq = (int)sqrt(CHUNK_CAP);
     for (int x = 0; x < chunk_cap_sq; ++x) {
@@ -151,14 +153,16 @@ static void regen_map(Entity_Manager* em, u64 seed) {
             chunk->z = 0;
             chunk->id = em->last_chunk_id++;
 
+            for (int jx = 0; jx < CHUNK_SIZE; ++jx) {
+                for (int jy = 0; jy < CHUNK_SIZE; ++jy) {
+                    Tile* const tile = &chunk->tiles[jx + jy * CHUNK_SIZE];
 
-            b32 did = false;
-            for (int i = 0; i < CHUNK_SIZE * CHUNK_SIZE; ++i) {
-                did = !did;
-                Tile* const tile = &chunk->tiles[i];
-                
-                seed = ((seed * 214012342343 + 2531012342341) >> 16) & 0x7ffffffff;
-                tile->type = (seed & 2) + 1;
+                    const f32 final_x = (f32)(x * CHUNK_SIZE) + (f32)jx;
+                    const f32 final_y = (f32)(y * CHUNK_SIZE) + (f32)jy;
+                    const f32 noise = perlin_get_2d(seed, final_x, final_y, 0.1f, 4);
+
+                    tile->type = (noise > 0.65f) + 1;
+                }
             }
         }
     }
@@ -177,9 +181,11 @@ DLL_EXPORT void init_game(Platform* platform) {
     g_game_state = mem_alloc_struct(platform->permanent_arena, Game_State);
     if (g_game_state->is_initialized) return;
     g_game_state->is_initialized = true;
+
     g_game_state->target_ortho_size = 5.f;
     g_game_state->current_ortho_size = g_game_state->target_ortho_size;
-    regen_map(&g_game_state->entity_manager, g_platform->cycles());
+
+    regen_map(&g_game_state->entity_manager, (Random_Seed) { g_platform->cycles() });
 }
 
 DLL_EXPORT void tick_game(f32 dt) {
@@ -195,7 +201,7 @@ DLL_EXPORT void tick_game(f32 dt) {
 
     const f32 mouse_wheel_delta = (f32)g_platform->input.state.mouse_wheel_delta / 50.f;
     g_game_state->target_ortho_size -= mouse_wheel_delta;
-    g_game_state->target_ortho_size = CLAMP(g_game_state->target_ortho_size, 10.f, 50.f);
+    g_game_state->target_ortho_size = CLAMP(g_game_state->target_ortho_size, 5.f, 50.f);
 
     g_game_state->current_ortho_size = lerpf(g_game_state->current_ortho_size, g_game_state->target_ortho_size, dt * 5.f);
 

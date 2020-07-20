@@ -572,7 +572,8 @@ void draw_game(Game_State* game_state) {
                 const Vector2 uv0 = tile->type == TT_Grass ? v2z() : v2(tile_size / 512.f, 0.f);
                 const Vector2 uv1 = tile->type == TT_Grass ? v2s(tile_size / 512.f) : v2((tile_size / 512.f) * 2.f, tile_size / 512.f);
 
-                imm_textured_rect((Rect) { min, max }, -5.f - (f32)chunk->z, uv0, uv1, v4s(1.f));
+                const Rect rect = { min, max };
+                imm_textured_rect(rect, -5.f - (f32)chunk->z, uv0, uv1, v4s(1.f));
             }
         }
         imm_flush();

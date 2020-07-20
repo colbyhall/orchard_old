@@ -194,13 +194,11 @@ static Asset_Type get_asset_type_from_path(String path) {
 
 void init_asset_manager(Platform* platform) {
     asset_manager = mem_alloc_struct(platform->permanent_arena, Asset_Manager);
+    asset_manager->path_memory  = arena_allocator(PATH_MEMORY_CAP, platform->permanent_arena);
+    asset_manager->asset_memory = arena_allocator(ASSET_MEMORY_CAP, platform->permanent_arena); // @TODO(colby): do pool allocator
 
     if (asset_manager->is_initialized) return;
-
     asset_manager->is_initialized = true;
-
-    asset_manager->path_memory = arena_allocator(PATH_MEMORY_CAP, platform->permanent_arena);
-    asset_manager->asset_memory = arena_allocator(ASSET_MEMORY_CAP, platform->permanent_arena); // @TODO(colby): do pool allocator
 
     for (directory_iterator(from_cstr("assets/"), true, platform->frame_arena)) {
         Temp_Memory temp_memory = begin_temp_memory(platform->frame_arena);
