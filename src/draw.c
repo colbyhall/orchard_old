@@ -240,22 +240,21 @@ void init_draw(Platform* platform) {
     b32 ok = init_framebuffer(
         g_platform->window_width, 
         g_platform->window_height, 
-        FF_GBuffer, 
+        FF_Albedo, 
         &draw_state->back_buffer
     );
     assert(ok);
 }
 
 void resize_draw(int new_width, int new_height) {
-    resize_framebuffer(&draw_state->g_buffer, new_width, new_height);
-    resize_framebuffer(&draw_state->hdr_buffer, new_width, new_height);
+    // resize_framebuffer(&draw_state->g_buffer, new_width, new_height);
+    // resize_framebuffer(&draw_state->hdr_buffer, new_width, new_height);
     resize_framebuffer(&draw_state->back_buffer, new_width, new_height);
 }
 
 void refresh_shader_transform(void) {
     set_uniform_m4("view",         draw_state->view_matrix);
     set_uniform_m4("projection",   draw_state->projection_matrix);
-    set_uniform_m4("model",        draw_state->model_matrix);
 }
 
 void draw_right_handed(Rect viewport) {
@@ -270,15 +269,6 @@ void draw_right_handed(Rect viewport) {
     refresh_shader_transform();
 }
 
-static Matrix4 axis_correction(void) {
-    Matrix4 result = { 0 };
-    result.col_row[0][2] = -1.f;
-    result.col_row[1][0] = 1.f;
-    result.col_row[2][1] = 1.f;
-    result.col_row[3][3] = 1.f;
-    return result;
-}
-
 static void draw_ortho(Vector3 pos, Quaternion rot, f32 aspect_ratio, f32 ortho_size) {
     draw_state->projection_matrix = m4_ortho(ortho_size, aspect_ratio, FAR_CLIP_PLANE, NEAR_CLIP_PLANE);
     draw_state->view_matrix       = m4_mul(m4_rotate(quat_inverse(rot)), m4_translate(v3_inverse(pos)));
@@ -288,16 +278,16 @@ static void draw_ortho(Vector3 pos, Quaternion rot, f32 aspect_ratio, f32 ortho_
 }
 
 void draw_persp(Vector3 pos, Quaternion rot, f32 aspect_ratio, f32 fov) {
-    draw_state->projection_matrix = m4_mul(m4_persp(fov, aspect_ratio, FAR_CLIP_PLANE, NEAR_CLIP_PLANE), axis_correction());
+    draw_state->projection_matrix = m4_persp(fov, aspect_ratio, FAR_CLIP_PLANE, NEAR_CLIP_PLANE);
     draw_state->view_matrix       = m4_mul(m4_rotate(quat_inverse(rot)), m4_translate(v3_inverse(pos)));
     draw_state->model_matrix      = m4_identity();
 
     refresh_shader_transform();   
 }
 
-void draw_from(Vector3 pos) {
-    draw_state->projection_matrix = m4_ortho((f32)draw_state->back_buffer.height / 2.f, 16.f / 9.f, FAR_CLIP_PLANE, NEAR_CLIP_PLANE);
-    draw_state->view_matrix       = m4_translate(v3_inverse(pos));
+void draw_from(Vector2 pos, f32 ortho_size) {
+    draw_state->projection_matrix = m4_ortho(ortho_size, (f32)draw_state->back_buffer.width / (f32)draw_state->back_buffer.height, FAR_CLIP_PLANE, NEAR_CLIP_PLANE);
+    draw_state->view_matrix       = m4_translate(v3_inverse(v3xy(pos, 0.f)));
     draw_state->model_matrix      = m4_identity();
 
     refresh_shader_transform();
@@ -344,32 +334,6 @@ void set_imm_vertex_format(void) {
     const GLuint color_loc = 3;
     glVertexAttribPointer(color_loc, 4, GL_FLOAT, GL_FALSE, sizeof(Immediate_Vertex), (void*)(sizeof(Vector3) + sizeof(Vector3) + sizeof(Vector2)));
     glEnableVertexAttribArray(color_loc);
-}
-
-void begin_draw(void) {
-    begin_framebuffer(draw_state->back_buffer);
-    clear_framebuffer(v3s(0.01f));
-
-    Shader* const s = find_shader(from_cstr("assets/shaders/solid_shape_geometry"));
-    set_shader(s);
-}
-
-void end_draw(void) {
-    end_framebuffer();
-
-    clear_framebuffer(v3s(0.f));
-    glViewport(0, 0, g_platform->window_width, g_platform->window_height);
-
-    Shader* const s = find_shader(from_cstr("assets/shaders/solid_shape_lighting"));
-    set_shader(s);
-    set_uniform_texture("diffuse_tex", draw_state->back_buffer.color[FCI_Albedo]);
-
-    const Rect viewport = { v2z(), v2((f32)g_platform->window_width, (f32)g_platform->window_height) };
-    draw_right_handed(viewport);
-
-    imm_begin();
-    imm_textured_rect(viewport, -5.f, v2z(), v2s(1.f), v4s(1.f));
-    imm_flush();
 }
 
 void imm_vertex(Vector3 position, Vector3 normal, Vector2 uv, Vector4 color) {
@@ -580,4 +544,32 @@ void imm_textured_plane(Vector3 pos, Quaternion rot, Rect rect, Vector2 uv0, Vec
     imm_vertex(bottom_left_pos, normal, bottom_left_uv, color);
     imm_vertex(bottom_right_pos, normal, bottom_right_uv, color);
     imm_vertex(top_right_pos, normal, top_right_uv, color);
+}
+
+void draw_game(Game_State* game_state) {
+    glViewport(0, 0, g_platform->window_width, g_platform->window_height);
+    clear_framebuffer(v3s(0.001f));
+
+    Entity_Manager* const em = &game_state->entity_manager;
+
+    // Draw the tilemap
+    set_shader(find_shader(from_cstr("assets/shaders/basic2d")));
+    draw_from(game_state->cam_pos, game_state->current_ortho_size);
+    for (int i = 0; i < em->chunk_count; ++i) {
+        Chunk* const chunk = &em->chunks[i];
+        
+        Vector2 pos = v2((f32)(chunk->x * CHUNK_SIZE), (f32)(chunk->y * CHUNK_SIZE));
+        imm_begin();
+        for (int x = 0; x < CHUNK_SIZE; ++x) {
+            for (int y = 0; y < CHUNK_SIZE; ++y) {
+                Tile* const tile = &chunk->tiles[x + y * CHUNK_SIZE];
+
+                const Vector2 min = v2_add(pos, v2((f32)x, (f32)y));
+                const Vector2 max = v2_add(min, v2s(1.f));
+                const Vector4 color = tile->type == TT_Grass ? color_from_hex(0x668D3CFF) : color_from_hex(0x816C5BFF);
+                imm_rect((Rect) { min, max }, -5.f - (f32)chunk->z, color);
+            }
+        }
+        imm_flush();
+    }
 }

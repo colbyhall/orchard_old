@@ -3,6 +3,7 @@
 
 #include "math.h"
 #include "opengl.h"
+#include "orchard.h"
 #include <stb/stb_truetype.h>
 
 typedef struct Mesh_Vertex {
@@ -63,15 +64,11 @@ Font* font_at_size(Font_Collection* collection, int size);
 Font_Glyph* glyph_from_rune(Font* f, Rune r);
 
 void init_draw(Platform* platform);
-void begin_draw(void);
-void end_draw(void);
-
 void resize_draw(int new_width, int new_height);
 
 void refresh_shader_transform(void);
 void draw_right_handed(Rect viewport);
-void draw_persp(Vector3 pos, Quaternion rot, f32 aspect_ratio, f32 fov);
-void draw_from(Vector3 pos); // Used for drawing our 2d scene using the back buffer for ortho size
+void draw_from(Vector2 pos, f32 ortho_size); // Used for drawing our 2d scene using the back buffer for ortho size
 
 void imm_begin(void);
 void imm_flush(void);
@@ -97,5 +94,7 @@ inline void imm_plane(Vector3 pos, Quaternion rot, Rect rect, Vector4 color) { i
 
 void begin_clip_rect(Rect rect);
 void end_clip_rect(void);
+
+void draw_game(Game_State* game_state);
 
 #endif /* DRAW_H */

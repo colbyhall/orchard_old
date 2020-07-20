@@ -13,6 +13,10 @@
 #define CLAMP(x, min, max) (MIN(MAX(x, min), max))
 #define SIGN(x) (x < 0.f ? -1.f : 1.f)
 
+inline f32 lerpf(f32 a, f32 b, f32 t) {
+    return a * (1.f - t) + b * t;
+}
+
 typedef union Vector2 {
     struct { f32 x, y; };
     struct { f32 u, v; };
@@ -40,6 +44,7 @@ inline Vector2 v2_norm(Vector2 a) {
 }
 
 inline f32 v2_dot(Vector2 a, Vector2 b)     { return a.x * b.x + a.y * b.y; }
+inline Vector2 v2_inverse(Vector2 a)        { return v2(-a.x, -a.y); }
 inline f32 v2_cross(Vector2 a, Vector2 b)   { return a.x * b.y - a.y * b.x; }
 inline Vector2 v2_perp(Vector2 a)           { return v2(a.y, -a.x); }
 inline Vector2 v2_negate(Vector2 a)         { return v2(-a.x, -a.y); }
@@ -109,6 +114,14 @@ typedef union Vector4 {
 
 inline Vector4 v4(f32 x, f32 y, f32 z, f32 w) { return (Vector4) { x, y, z, w }; }
 inline Vector4 v4s(f32 s) { return v4(s, s, s, s); }
+inline Vector4 color_from_hex(int color) {
+    const u8 red   = (u8)((color & 0xFF000000) >> 24);
+    const u8 green = (u8)((color & 0x00FF0000) >> 16);
+    const u8 blue  = (u8)((color & 0x0000FF00) >> 8);
+    const u8 alpha = (u8)(color & 0x000000FF);
+
+    return v4((f32)red / 255.f, (f32)green / 255.f, (f32)blue / 255.f, (f32)alpha / 255.f);
+}
 
 typedef union Quaternion {
     struct { f32 x, y, z, w; };

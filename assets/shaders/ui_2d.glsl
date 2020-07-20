@@ -25,7 +25,7 @@ void main() {
         vec4 sample = texture(diffuse, frag_uv);
         final_color = vec4(frag_color.xyz, sample.r);
     } else {
+        final_color = frag_color;
     }
-    final_color = frag_color;
 }
 #endif

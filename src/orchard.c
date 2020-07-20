@@ -1,4 +1,5 @@
 #include "platform.h"
+#include "orchard.h"
 
 // Include the OS stuff before any implementations
 #if PLATFORM_WINDOWS
@@ -136,11 +137,32 @@ u64 hash_string(void* a, void* b, int size) {
     return fnv1_hash(s_a->data, s_a->len);
 }
 
-typedef struct Game_State {
-    b32 is_initialized;
-} Game_State;
-
 static Game_State* g_game_state;
+
+static void regen_map(Entity_Manager* em, u64 seed) {
+    *em = (Entity_Manager) { 0 };
+
+    const int chunk_cap_sq = (int)sqrt(CHUNK_CAP);
+    for (int x = 0; x < chunk_cap_sq; ++x) {
+        for (int y = 0; y < chunk_cap_sq; ++y) {
+            Chunk* const chunk = &em->chunks[em->chunk_count++];
+            chunk->x = x;
+            chunk->y = y;
+            chunk->z = 0;
+            chunk->id = em->last_chunk_id++;
+
+            seed = ((seed * 214012342343 + 2531012342341) >> 16) & 0x7ffffffff;
+
+            b32 did = false;
+            for (int i = 0; i < CHUNK_SIZE * CHUNK_SIZE; ++i) {
+                did = !did;
+                Tile* const tile = &chunk->tiles[i];
+                tile->type = (seed & ) + 1;
+                seed += seed & 0x000000FFFFFFFFFF;
+            }
+        }
+    }
+}
 
 DLL_EXPORT void init_game(Platform* platform) {
     g_platform = platform;
@@ -155,6 +177,9 @@ DLL_EXPORT void init_game(Platform* platform) {
     g_game_state = mem_alloc_struct(platform->permanent_arena, Game_State);
     if (g_game_state->is_initialized) return;
     g_game_state->is_initialized = true;
+    g_game_state->target_ortho_size = 5.f;
+    g_game_state->current_ortho_size = g_game_state->target_ortho_size;
+    regen_map(&g_game_state->entity_manager, g_platform->cycles());
 }
 
 DLL_EXPORT void tick_game(f32 dt) {
@@ -166,6 +191,38 @@ DLL_EXPORT void tick_game(f32 dt) {
             resize_draw(g_platform->window_width, g_platform->window_height);
             break;
         }
+    }
+
+    const f32 mouse_wheel_delta = (f32)g_platform->input.state.mouse_wheel_delta / 50.f;
+    g_game_state->target_ortho_size += mouse_wheel_delta;
+    g_game_state->target_ortho_size = CLAMP(g_game_state->target_ortho_size, 10.f, 50.f);
+
+    g_game_state->current_ortho_size = lerpf(g_game_state->current_ortho_size, g_game_state->target_ortho_size, dt * 5.f);
+
+    if (g_platform->input.state.mouse_buttons_down[MOUSE_MIDDLE]) {
+        const Vector2 mouse_delta = v2((f32)g_platform->input.state.mouse_dx, (f32)g_platform->input.state.mouse_dy);
+        const f32 speed = (g_game_state->current_ortho_size * 2.f) / (f32)g_platform->window_height;
+
+        g_game_state->cam_pos = v2_add(g_game_state->cam_pos, v2_mul(v2_inverse(mouse_delta), v2s(speed)));
+    }
+
+    draw_game(g_game_state);
+
+    {
+        const Rect viewport = { v2z(), v2((f32)g_platform->window_width, (f32)g_platform->window_height) };
+        set_shader(find_shader(from_cstr("assets/shaders/font")));
+        draw_right_handed(viewport);
+
+        Font_Collection* const fc = find_font_collection(from_cstr("assets/fonts/Menlo-Regular"));
+        Font* const font = font_at_size(fc, 48);
+        set_uniform_texture("atlas", font->atlas);
+
+        char buffer[2048];
+        sprintf(buffer, "Cam Pos: %fx %fy\nOrtho Size: %f", g_game_state->cam_pos.x, g_game_state->cam_pos.y, g_game_state->current_ortho_size);
+
+        imm_begin();
+        imm_string(from_cstr(buffer), font, 100000.f, v2(0.f, viewport.max.y - 48.f), -4.f, v4s(1.f));
+        imm_flush();
     }
 
     swap_gl_buffers(g_platform);

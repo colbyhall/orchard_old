@@ -1,41 +1,38 @@
 #ifdef VERTEX
+
 layout(location = 0) in vec3 position;
 layout(location = 1) in vec3 normal;
 layout(location = 2) in vec2 uv;
+layout(location = 3) in vec4 color;
 
 uniform mat4 projection;
 uniform mat4 view;
-uniform mat4 model;
 
-out vec3 frag_normal;
-out vec3 frag_position;
+out vec4 frag_color;
 out vec2 frag_uv;
 
 void main() {
-    gl_Position = projection * view * model * vec4(position, 1.0);
-
-    mat3 inv_model = mat3(transpose(inverse(model))); 
-    frag_normal   = normalize(inv_model * normal);
-    frag_position = inv_model * position;
-    frag_uv       = uv;
+    gl_Position =  projection * view * vec4(position, 1.0);
+    frag_color = color;
+    frag_uv = uv;
 }
+
 #endif
-
 #ifdef FRAGMENT
-layout (location = 0) out vec4 position;
-layout (location = 1) out vec4 normal;
-layout (location = 2) out vec4 albedo;
 
-in vec3 frag_position;
-in vec3 frag_normal;
+out vec4 final_color;
+in vec4 frag_color;
 in vec2 frag_uv;
 
-uniform vec4 color;
-uniform sampler2D diffuse_tex;
+uniform sampler2D diffuse;
 
 void main() {
-    position = vec4(frag_position, 1.0);
-    normal   = vec4(frag_normal, 1.0);
-    albedo   = vec4(color.xyz, 1.0);
+    if (frag_uv.x > -1.0) {
+        vec4 sample = texture(diffuse, frag_uv);
+        final_color = vec4(frag_color.xyz, sample.r);
+    } else {
+        final_color = frag_color;
+    }
 }
+
 #endif
