@@ -1576,6 +1576,8 @@ STBTT_DEF int stbtt_FindGlyphIndex(const stbtt_fontinfo *info, int unicode_codep
       }
       return 0; // not found
    }
+
+   printf("%i", unicode_codepoint);
    // @TODO
    STBTT_assert(0);
    return 0;

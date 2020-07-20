@@ -81,6 +81,29 @@ typedef PLATFORM_CYCLES(Platform_Cycles);
 #define PLATFORM_TIME_IN_SECONDS(name) f32 name(void)
 typedef PLATFORM_TIME_IN_SECONDS(Platform_Time_In_Seconds);
 
+typedef enum OS_Event_Type {
+    OET_Window_Resized = 0,
+    OET_Window_Closed,
+    OET_Key_Pressed,
+    OET_Key_Released,
+    OET_Char,
+    OET_Mouse_Button_Pressed,
+    OET_Mouse_Button_Released,
+    OET_Mouse_Moved,
+} OS_Event_Type;
+
+typedef struct OS_Event {
+    OS_Event_Type type;
+    union {
+        struct { int old_width, old_height; };
+        u8 key;
+        Rune c;
+        u8 mouse_button;
+        struct { int pos_x, pos_y; };
+    };
+} OS_Event;
+
+#define OS_EVENT_CAP 256
 typedef struct Platform {
     Allocator permanent_arena;
     Allocator frame_arena;
@@ -107,7 +130,10 @@ typedef struct Platform {
     f64 current_frame_time;
     f64 last_frame_time;
 
-    Input_State input;
+    int num_events;
+    OS_Event events[OS_EVENT_CAP];
+
+    Input input;
 } Platform;
 
 extern Platform* g_platform;

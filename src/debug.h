@@ -19,4 +19,6 @@ void output_log(Log_Severity Log_Severity, const char* fmt, ...);
 b32 init_logger(Platform* platform);
 void shutdown_logger(void);
 
+
+
 #endif /* DEBUG_H */

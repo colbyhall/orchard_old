@@ -71,7 +71,7 @@ b32 init_shader(Shader* shader) {
     const GLuint vert_id = glCreateShader(GL_VERTEX_SHADER);
     const GLuint frag_id = glCreateShader(GL_FRAGMENT_SHADER);
 
-    const GLchar* shader_header = "#version 330 core\n#extension GL_ARB_seperate_shader_objects: enable\n";
+    const GLchar* shader_header = "#version 330 core\n";
 
     assert(shader->source.data && shader->source.len);
 
@@ -164,7 +164,7 @@ static
 Shader_Uniform* find_uniform(const char* name, GLenum type) {
     Shader* const s = get_bound_shader();
     if (!s) {
-        o_log_error("[OpenGL] Tried to set uniform but no shader was bound\n");
+        o_log_error("[OpenGL] Tried to set uniform but no shader was bound");
         return false;
     }
 
@@ -174,14 +174,13 @@ Shader_Uniform* find_uniform(const char* name, GLenum type) {
         if (str_cmp(name, it->name) != 0) continue;
 
         if (it->type != type) {
-            o_log_error("[OpenGL] Tried to set uniform with wrong type. %s has the type of %s\n", name, get_shader_var_type_string(GL_FLOAT_MAT4));
+            o_log_error("[OpenGL] Tried to set uniform with wrong type. %s has the type of %s", name, get_shader_var_type_string(GL_FLOAT_MAT4));
             return 0;
         }
 
         return it;
     }
 
-    o_log_error("[OpenGL] Failed to find uniform %s\n", name);
     return 0;
 }
 
@@ -238,19 +237,21 @@ b32 init_framebuffer(int width, int height, int flags, Framebuffer* framebuffer)
         .flags  = flags,
     };
 
-    if ((flags & FF_Diffuse) != 0) {
-        GLuint diffuse_texture;
-        glGenTextures(1, &diffuse_texture);
-        glBindTexture(GL_TEXTURE_2D, diffuse_texture);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
+    if ((flags & FF_HDR)) assert((flags & FF_Albedo) == 0);
+
+    if ((flags & FF_Position) != 0) {
+        GLuint position_texture;
+        glGenTextures(1, &position_texture);
+        glBindTexture(GL_TEXTURE_2D, position_texture);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, width, height, 0, GL_RGBA, GL_FLOAT, 0);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + FCI_Diffuse, GL_TEXTURE_2D, diffuse_texture, 0);
-        result.color[FCI_Diffuse] = (Texture2d) {  
-            .width = width, 
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + FCI_Position, GL_TEXTURE_2D, position_texture, 0);
+        result.color[FCI_Position] = (Texture2d) {  
+            .width  = width, 
             .height = height, 
-            .depth = 4, 
-            .id = diffuse_texture,
+            .depth  = 4, 
+            .id     = position_texture,
         };
     }
 
@@ -270,21 +271,6 @@ b32 init_framebuffer(int width, int height, int flags, Framebuffer* framebuffer)
         };
     }
 
-    if ((flags & FF_Position) != 0) {
-        GLuint position_texture;
-        glGenTextures(1, &position_texture);
-        glBindTexture(GL_TEXTURE_2D, position_texture);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, width, height, 0, GL_RGBA, GL_FLOAT, 0);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + FCI_Position, GL_TEXTURE_2D, position_texture, 0);
-        result.color[FCI_Position] = (Texture2d) {  
-            .width  = width, 
-            .height = height, 
-            .depth  = 4, 
-            .id     = position_texture,
-        };
-    }
 
     if ((flags & FF_Depth) != 0) {
         GLuint depth_texture;
@@ -306,6 +292,38 @@ b32 init_framebuffer(int width, int height, int flags, Framebuffer* framebuffer)
         };
     }
 
+    if ((flags & FF_Albedo) != 0) {
+        GLuint albedo_texture;
+        glGenTextures(1, &albedo_texture);
+        glBindTexture(GL_TEXTURE_2D, albedo_texture);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + FCI_Albedo, GL_TEXTURE_2D, albedo_texture, 0);
+        result.color[FCI_Albedo] = (Texture2d) {  
+            .width = width, 
+            .height = height, 
+            .depth = 4, 
+            .id = albedo_texture,
+        };
+    }
+
+    if ((flags & FF_HDR) != 0) {
+        GLuint hdr_texture;
+        glGenTextures(1, &hdr_texture);
+        glBindTexture(GL_TEXTURE_2D, hdr_texture);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, width, height, 0, GL_RGBA, GL_FLOAT, 0);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + FCI_HDR, GL_TEXTURE_2D, hdr_texture, 0);
+        result.color[FCI_HDR] = (Texture2d) {
+            .width  = width,
+            .height = height,
+            .depth  = 4,
+            .id     = hdr_texture,
+        };
+    }
+
     if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
         // @TODO(colby): do cleanup
         return false;
@@ -318,11 +336,30 @@ b32 init_framebuffer(int width, int height, int flags, Framebuffer* framebuffer)
 }
 
 b32 free_framebuffer(Framebuffer* framebuffer) {
-    return false; // @TODO
+    const int flags = framebuffer->flags;
+
+    GLuint textures_to_delete[FCI_Count + 1] = { 0 }; // + 1 for the depth buffer
+    int num_textures_to_delete = 0;
+
+    if ((flags & FF_Position) != 0) textures_to_delete[num_textures_to_delete++] = framebuffer->color[FCI_Position].id;
+    if ((flags & FF_Normal) != 0)   textures_to_delete[num_textures_to_delete++] = framebuffer->color[FCI_Normal].id;
+    if ((flags & FF_Albedo) != 0)   textures_to_delete[num_textures_to_delete++] = framebuffer->color[FCI_Albedo].id;
+    if ((flags & FF_HDR) != 0)      textures_to_delete[num_textures_to_delete++] = framebuffer->color[FCI_HDR].id;
+    if ((flags & FF_Depth) != 0)    textures_to_delete[num_textures_to_delete++] = framebuffer->depth.id;
+
+    glDeleteTextures(num_textures_to_delete, textures_to_delete);
+    glDeleteFramebuffers(1, &framebuffer->handle);
+
+    *framebuffer = (Framebuffer) { 0 };
+
+    return true;
 }
 
 b32 resize_framebuffer(Framebuffer* framebuffer, int width, int height) {
-    return false;
+    const int flags = framebuffer->flags;
+    b32 ok = free_framebuffer(framebuffer);
+    ok &= init_framebuffer(width, height, flags, framebuffer);
+    return ok;
 }
 
 void begin_framebuffer(Framebuffer framebuffer) {
@@ -332,9 +369,10 @@ void begin_framebuffer(Framebuffer framebuffer) {
     int num_attachments = 0;
     
     const int flags = framebuffer.flags;
-    if ((flags & FF_Diffuse) != 0)  attachments[num_attachments++] = GL_COLOR_ATTACHMENT0 + FCI_Diffuse;
-    if ((flags & FF_Normal) != 0)   attachments[num_attachments++] = GL_COLOR_ATTACHMENT0 + FCI_Normal;
     if ((flags & FF_Position) != 0) attachments[num_attachments++] = GL_COLOR_ATTACHMENT0 + FCI_Position;
+    if ((flags & FF_Normal) != 0)   attachments[num_attachments++] = GL_COLOR_ATTACHMENT0 + FCI_Normal;
+    if ((flags & FF_Albedo) != 0)   attachments[num_attachments++] = GL_COLOR_ATTACHMENT0 + FCI_Albedo;
+    if ((flags & FF_HDR) != 0)      attachments[num_attachments++] = GL_COLOR_ATTACHMENT0 + FCI_HDR;
 
     glDrawBuffers(num_attachments, attachments);
     glViewport(0, 0, framebuffer.width, framebuffer.height);

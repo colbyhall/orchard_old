@@ -78,6 +78,7 @@ static b32 load_mesh(Asset* asset, String file, Allocator asset_memory) {
 
         for (int j = 0; j < (int)group->face_count; ++j) {
             const int vertex_count = fast_obj_mesh->face_vertices[group->face_offset + j];
+
             if (vertex_count == 3) index_cap += 3;
             else if (vertex_count == 4) index_cap += 6;
             else assert(false); // @Incomplete!!! does this even happen???
@@ -103,10 +104,10 @@ static b32 load_mesh(Asset* asset, String file, Allocator asset_memory) {
                 const fastObjIndex* const index = fast_obj_mesh->indices + index_offset + k;
                 
                 const float* const p = fast_obj_mesh->positions + index->p * 3;
-                const Vector3 position = v3(p[0], p[1], p[2]);
+                const Vector3 position = v3(-p[2], p[0], p[1]);
 
                 const float* const n = fast_obj_mesh->normals + index->n * 3;
-                const Vector3 normal = v3(n[0], n[1], n[2]);
+                const Vector3 normal = v3(-n[2], n[0], n[1]);
 
                 const float* const u = fast_obj_mesh->texcoords + index->t * 2;
                 const Vector2 uv = v2(u[0], u[1]);
@@ -161,7 +162,7 @@ typedef struct Asset_Manager {
     b32 is_initialized;
 } Asset_Manager;
 
-static Asset_Manager* g_asset_manager = 0;
+static Asset_Manager* asset_manager = 0;
 
 typedef struct Asset_Type_Extension {
     Asset_Type type;
@@ -185,23 +186,23 @@ static Asset_Type get_asset_type_from_path(String path) {
     
     for (int i = 0; i < array_count(asset_type_extensions); ++i) {
         const Asset_Type_Extension ate = asset_type_extensions[i]; // Nom nom nom
-        if (string_equal(ext, string_from_raw(ate.ext))) return ate.type;
+        if (string_equal(ext, from_cstr(ate.ext))) return ate.type;
     }
 
     return AT_None;
 }
 
 void init_asset_manager(Platform* platform) {
-    g_asset_manager = mem_alloc_struct(platform->permanent_arena, Asset_Manager);
+    asset_manager = mem_alloc_struct(platform->permanent_arena, Asset_Manager);
 
-    if (g_asset_manager->is_initialized) return;
+    if (asset_manager->is_initialized) return;
 
-    g_asset_manager->is_initialized = true;
+    asset_manager->is_initialized = true;
 
-    g_asset_manager->path_memory = arena_allocator(PATH_MEMORY_CAP, platform->permanent_arena);
-    g_asset_manager->asset_memory = arena_allocator(ASSET_MEMORY_CAP, platform->permanent_arena); // @TODO(colby): do pool allocator
+    asset_manager->path_memory = arena_allocator(PATH_MEMORY_CAP, platform->permanent_arena);
+    asset_manager->asset_memory = arena_allocator(ASSET_MEMORY_CAP, platform->permanent_arena); // @TODO(colby): do pool allocator
 
-    for (directory_iterator(string_from_raw("assets/"), true, platform->frame_arena)) {
+    for (directory_iterator(from_cstr("assets/"), true, platform->frame_arena)) {
         Temp_Memory temp_memory = begin_temp_memory(platform->frame_arena);
         if (iter->type != DET_File) continue;
 
@@ -210,12 +211,12 @@ void init_asset_manager(Platform* platform) {
         const Asset_Type type = get_asset_type_from_path(iter->path);
         if (!type) continue;
 
-        Asset* const asset = &g_asset_manager->assets[g_asset_manager->asset_count++];
-        asset->path = copy_string(iter->path, g_asset_manager->path_memory);
+        Asset* const asset = &asset_manager->assets[asset_manager->asset_count++];
+        asset->path = copy_string(iter->path, asset_manager->path_memory);
         asset->type = type;
         
         String file;
-        if (!read_file_into_string(iter->path, &file, platform->frame_arena)) {
+        if (!read_file_into_string(iter->path, &file, asset_manager->asset_memory)) {
             end_temp_memory(temp_memory);
             o_log_error("[Asset] %s failed to load file from path %s", asset_type_string[type], (const char*)iter->path.data);
             continue;
@@ -224,13 +225,13 @@ void init_asset_manager(Platform* platform) {
         switch (type) {
 #define LOAD_ASSET(at, load, unload) \
         case at: \
-            if (!load(asset, file, g_asset_manager->asset_memory)) { \
+            if (!load(asset, file, asset_manager->asset_memory)) { \
                 end_temp_memory(temp_memory); \
                 o_log_error("[Asset] %s failed to initialize from path %s", asset_type_string[type], (const char*)iter->path.data); \
                 continue; \
             } else { \
                 const f32 duration = g_platform->time_in_seconds() - start_time; \
-                o_log("[Asset] took %fs to load %s from path %s", duration, asset_type_string[type], (const char*)iter->path.data); \
+                o_log("[Asset] took %ims to load %s from path %s", (int)(duration * 1000.f), asset_type_string[type], (const char*)iter->path.data); \
             } \
             break;
         ASSET_TYPE_DEFINITION(LOAD_ASSET);
@@ -247,8 +248,8 @@ void init_asset_manager(Platform* platform) {
 
 Asset* find_asset(String path) {
     // @SPEED @SPEED @SPEED @SPEED @SPEED @SPEED
-    for (int i = 0; i < g_asset_manager->asset_count; ++i) {
-        Asset* const asset = &g_asset_manager->assets[i];
+    for (int i = 0; i < asset_manager->asset_count; ++i) {
+        Asset* const asset = &asset_manager->assets[i];
         if (starts_with(asset->path, path)) return asset;
     }
 

@@ -273,19 +273,22 @@ void set_shader(Shader* s);
 Shader* get_bound_shader(void);
 
 enum Framebuffer_Flags {
-    FF_Diffuse     = (1 << 0),
-    FF_Position    = (1 << 1),
-    FF_Normal      = (1 << 2),
+    FF_Position    = (1 << 0),
+    FF_Normal      = (1 << 1),
+    FF_Albedo      = (1 << 2),
     FF_Depth       = (1 << 3),
 
-    FF_GBuffer     = (FF_Diffuse | FF_Position | FF_Normal | FF_Depth),
+    FF_GBuffer     = (FF_Position | FF_Normal | FF_Albedo | FF_Depth),
+
+    FF_HDR         = (1 << 4),
 };
 
 enum Framebuffer_Colors_Index {
-    FCI_Diffuse = 0,
+    FCI_Position = 0,
     FCI_Normal,
-    FCI_Position,
+    FCI_Albedo,
     FCI_Count,
+    FCI_HDR      = 0,
 };
 
 typedef struct Framebuffer {

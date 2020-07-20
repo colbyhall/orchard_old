@@ -55,7 +55,7 @@ static void new_dll_path(char* buffer) {
 
 static b32 try_reload_dll(Game_Code* game_code) {
     File_Metadata metadata;
-    const b32 found_metadata = g_platform->file_metadata(string_from_raw(dll_path), &metadata);
+    const b32 found_metadata = g_platform->file_metadata(from_cstr(dll_path), &metadata);
     if (!found_metadata) {
         return false;
     }
@@ -245,59 +245,77 @@ static PLATFORM_TIME_IN_SECONDS(win32_time_in_seconds) {
     return time.QuadPart / (f32)g_qpc_freq.QuadPart;
 }
 
+#define push_os_event(t, ...) g_platform->events[g_platform->num_events++] = (OS_Event) { .type = t, __VA_ARGS__ }
+
 static LRESULT the_window_proc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam) {
     switch (Msg) {
     case WM_DESTROY:
         is_running = false;
         break;
     case WM_SYSKEYDOWN:
-    case WM_KEYDOWN:
-        g_platform->input.keys_down[(u8)wParam] = true;
-        break;
+    case WM_KEYDOWN: {
+        const u8 key = (u8)wParam;
+        g_platform->input.state.keys_down[key] = true;
+        push_os_event(OET_Key_Pressed, .key = key);
+    } break;
     case WM_SYSKEYUP:
-    case WM_KEYUP:
-        g_platform->input.keys_down[(u8)wParam] = false;
-        break;
+    case WM_KEYUP: {
+        const u8 key = (u8)wParam;
+        g_platform->input.state.keys_down[key] = false;
+        push_os_event(OET_Key_Released, .key = key);
+    } break;
     case WM_LBUTTONDOWN:
-        g_platform->input.mouse_buttons_down[MOUSE_LEFT] = true;
+        g_platform->input.state.mouse_buttons_down[MOUSE_LEFT] = true;
         SetCapture((HWND)g_platform->window_handle);
+        push_os_event(OET_Mouse_Button_Pressed, .mouse_button = MOUSE_LEFT);
         break;
     case WM_LBUTTONUP:
-        g_platform->input.mouse_buttons_down[MOUSE_LEFT] = false;
+        g_platform->input.state.mouse_buttons_down[MOUSE_LEFT] = false;
         ReleaseCapture();
+        push_os_event(OET_Mouse_Button_Released, .mouse_button = MOUSE_LEFT);
         break;
     case WM_RBUTTONDOWN:
-        g_platform->input.mouse_buttons_down[MOUSE_RIGHT] = true;
+        g_platform->input.state.mouse_buttons_down[MOUSE_RIGHT] = true;
         SetCapture((HWND)g_platform->window_handle);
+        push_os_event(OET_Mouse_Button_Pressed, .mouse_button = MOUSE_RIGHT);
         break;
     case WM_RBUTTONUP:
-        g_platform->input.mouse_buttons_down[MOUSE_RIGHT] = false;
+        g_platform->input.state.mouse_buttons_down[MOUSE_RIGHT] = false;
         ReleaseCapture();
+        push_os_event(OET_Mouse_Button_Released, .mouse_button = MOUSE_RIGHT);
         break;
     case WM_MBUTTONDOWN:
-        g_platform->input.mouse_buttons_down[MOUSE_MIDDLE] = true;
+        g_platform->input.state.mouse_buttons_down[MOUSE_MIDDLE] = true;
         SetCapture((HWND)g_platform->window_handle);
+        push_os_event(OET_Mouse_Button_Pressed, .mouse_button = MOUSE_MIDDLE);
         break;
     case WM_MBUTTONUP:
-        g_platform->input.mouse_buttons_down[MOUSE_MIDDLE] = false;
+        g_platform->input.state.mouse_buttons_down[MOUSE_MIDDLE] = false;
         ReleaseCapture();
+        push_os_event(OET_Mouse_Button_Released, .mouse_button = MOUSE_MIDDLE);
         break;
     case WM_MOUSEWHEEL:
-        g_platform->input.mouse_wheel_delta = GET_WHEEL_DELTA_WPARAM(wParam);
+        g_platform->input.state.mouse_wheel_delta = GET_WHEEL_DELTA_WPARAM(wParam);
         break;
     case WM_MOUSEMOVE: {
         const int mouse_x = GET_X_LPARAM(lParam);
-        const int mouse_y = GET_Y_LPARAM(lParam);
+        const int mouse_y = g_platform->window_height - GET_Y_LPARAM(lParam);
         
-        g_platform->input.mouse_x = mouse_x;
-        g_platform->input.mouse_y = g_platform->window_height - mouse_y;
+        g_platform->input.state.mouse_x = mouse_x;
+        g_platform->input.state.mouse_y = mouse_y;
+
+        g_platform->input.state.mouse_dx = mouse_x - g_platform->input.prev_state.mouse_x;
+        g_platform->input.state.mouse_dy = mouse_y - g_platform->input.prev_state.mouse_y;
     } break;
     case WM_SIZE:
     case WM_SIZING:
         RECT viewport = { 0 };
         GetClientRect((HWND)g_platform->window_handle, &viewport);
+        const int old_width = g_platform->window_width;
+        const int old_height = g_platform->window_height;
         g_platform->window_width  = viewport.right - viewport.left;
         g_platform->window_height = viewport.bottom - viewport.top;
+        push_os_event(OET_Window_Resized, .old_width = old_width, .old_height = old_height);
         break;
     }
 
@@ -311,10 +329,10 @@ typedef enum PROCESS_DPI_AWARENESS {
 } PROCESS_DPI_AWARENESS;
 
 typedef enum MONITOR_DPI_TYPE {
-  MDT_EFFECTIVE_DPI,
-  MDT_ANGULAR_DPI,
-  MDT_RAW_DPI,
-  MDT_DEFAULT
+    MDT_EFFECTIVE_DPI,
+    MDT_ANGULAR_DPI,
+    MDT_RAW_DPI,
+    MDT_DEFAULT
 } MONITOR_DPI_TYPE;
 
 typedef HRESULT (*Set_Process_DPI_Awareness)(PROCESS_DPI_AWARENESS value);
@@ -326,6 +344,7 @@ int main(int argv, char** argc) {
         PERMANENT_MEMORY_CAP
     );
     
+    // This is a different virtual alloc because we need to rese the permanent allocator completely when doing a hot reload
     Allocator frame_arena = arena_allocator_raw(
         VirtualAlloc(0, FRAME_MEMORY_CAP, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE),
         FRAME_MEMORY_CAP
@@ -458,10 +477,13 @@ int main(int argv, char** argc) {
         g_platform->current_frame_time  = current_frame_time.QuadPart / (f64)g_qpc_freq.QuadPart;
         last_frame_time = current_frame_time;
 
+        g_platform->input.prev_state = g_platform->input.state;
+
         // Reset input state
-        g_platform->input.mouse_dx = 0;
-        g_platform->input.mouse_dy = 0;
-        g_platform->input.mouse_wheel_delta = 0;
+        g_platform->input.state.mouse_dx = 0;
+        g_platform->input.state.mouse_dy = 0;
+        g_platform->input.state.mouse_wheel_delta = 0;
+        g_platform->num_events = 0;
 
         // Poll input from the window
         MSG msg;
@@ -474,7 +496,7 @@ int main(int argv, char** argc) {
         game_code_vtable.tick_game(dt);
         reset_arena(the_platform.frame_arena);
 
-        // Do a hot reload if we can
+        // Do a hot reload if it can
         if (try_reload_dll(&game_code)) {
             reset_arena(the_platform.permanent_arena);
             game_code_vtable.init_game(g_platform);

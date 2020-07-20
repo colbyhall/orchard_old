@@ -55,7 +55,6 @@ typedef struct Font_Collection {
     int* codepoint_indices;
     int codepoint_count;
 
-    f32 atlas_area; // Used for determining oversample amount;
     Allocator asset_memory;
 } Font_Collection;
 
@@ -63,19 +62,16 @@ b32 init_font_collection(u8* data, int len, Allocator asset_memory, Font_Collect
 Font* font_at_size(Font_Collection* collection, int size);
 Font_Glyph* glyph_from_rune(Font* f, Rune r);
 
-extern Font_Collection* g_font_collection; // @Temp
-extern Shader* g_font_shader;
-
-void init_draw(Allocator allocator);
-
+void init_draw(Platform* platform);
 void begin_draw(void);
 void end_draw(void);
 
-void imm_refresh_transform(void);
-void imm_draw_right_handed(Rect viewport);
-void imm_draw_ortho(Vector3 pos, f32 aspect_ratio, f32 ortho_size);
-void imm_draw_from(Vector3 pos); // This is the one that uses the g_back_buffer
-void imm_draw_persp(Vector3 pos);
+void resize_draw(int new_width, int new_height);
+
+void refresh_shader_transform(void);
+void draw_right_handed(Rect viewport);
+void draw_persp(Vector3 pos, Quaternion rot, f32 aspect_ratio, f32 fov);
+void draw_from(Vector3 pos); // Used for drawing our 2d scene using the back buffer for ortho size
 
 void imm_begin(void);
 void imm_flush(void);
@@ -83,13 +79,13 @@ void imm_vertex(Vector3 position, Vector3 normal, Vector2 uv, Vector4 color);
 void set_imm_vertex_format(void);
 
 void imm_textured_rect(Rect rect, f32 z, Vector2 uv0, Vector2 uv1, Vector4 color);
-void imm_rect(Rect rect, f32 z, Vector4 color);
+inline void imm_rect(Rect rect, f32 z, Vector4 color) { imm_textured_rect(rect, z, v2s(-1.f), v2s(-1.f), color); }
 
 void imm_textured_border_rect(Rect rect, f32 z, f32 thickness, Vector2 uv0, Vector2 uv1, Vector4 color);
-void imm_border_rect(Rect rect, f32 z, f32 thickness, Vector4 color);
+inline void imm_border_rect(Rect rect, f32 z, f32 thickness, Vector4 color) { imm_textured_border_rect(rect, z, thickness, v2s(-1.f), v2s(-1.f), color); }
 
 void imm_textured_line(Vector2 a1, Vector2 a2, f32 z, f32 thickness, Vector2 uv0, Vector2 uv1, Vector4 color);
-void imm_line(Vector2 a1, Vector2 a2, f32 z, f32 thickness, Vector4 color);
+inline void imm_line(Vector2 a1, Vector2 a2, f32 z, f32 thickness, Vector4 color) { imm_textured_line(a1, a2, z, thickness, v2s(-1.f), v2s(-1.f), color); }
 void imm_arrow(Vector2 a1, Vector2 a2, f32 z, f32 thickness, Vector4 color);
 
 void imm_glyph(Font_Glyph* g, Font* font, Vector2 xy, f32 z, Vector4 color);
@@ -97,9 +93,7 @@ Font_Glyph* imm_rune(Rune r, Font* font, Vector2 xy, f32 z, Vector4 color);
 void imm_string(String str, Font* font, f32 max_width, Vector2 xy, f32 z, Vector4 color);
 
 void imm_textured_plane(Vector3 pos, Quaternion rot, Rect rect, Vector2 uv0, Vector2 uv1, Vector4 color);
-inline void imm_plane(Vector3 pos, Quaternion rot, Rect rect, Vector4 color) {
-    imm_textured_plane(pos, rot, rect, v2s(-1.f), v2s(-1.f), color);
-}
+inline void imm_plane(Vector3 pos, Quaternion rot, Rect rect, Vector4 color) { imm_textured_plane(pos, rot, rect, v2s(-1.f), v2s(-1.f), color); }
 
 void begin_clip_rect(Rect rect);
 void end_clip_rect(void);

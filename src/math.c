@@ -73,7 +73,7 @@ Matrix4 m4_ortho(f32 size, f32 aspect_ratio, f32 far, f32 near) {
 }
 
 Matrix4 m4_persp(f32 fov, f32 asepct_ratio, f32 far, f32 near) {
-    Matrix4 result = (Matrix4) { 0 };
+    Matrix4 result = m4_identity();
 
     const f32 cotangent = 1.f / tanf(fov * (PI / 360.f));
     result.e[0 + 0 * 4] = cotangent / asepct_ratio;
@@ -81,6 +81,8 @@ Matrix4 m4_persp(f32 fov, f32 asepct_ratio, f32 far, f32 near) {
     result.e[3 + 2 * 4] = -1.f;
     result.e[2 + 2 * 4] = (near + far) / (near - far);
     result.e[2 + 3 * 4] = (2.f * near * far) / (near - far);
+    result.e[3 + 3 * 4] = 0.f;
+    
     return result;
 }
 
@@ -94,6 +96,8 @@ Matrix4 m4_translate(Vector3 translation) {
 
 Matrix4 m4_rotate(Quaternion rot) {
     Matrix4 result = m4_identity();
+
+    rot = quat_norm(rot);
 
     const f32 xx = rot.x * rot.x;
     const f32 xy = rot.x * rot.y;

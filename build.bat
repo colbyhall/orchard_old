@@ -24,9 +24,11 @@ set opts=%opts% -nologo -fp:fast -fp:except- -Gm- -GR- -EHa- -Zo -Oi -WX -W4 -wd
 set opts=%opts% -wd4189 -wd4505 -wd4127 -wd4204 -wd4221 -FC -GS- -Gs9999999 %mode%
 set links=-incremental:no -opt:ref "kernel32.lib" "user32.lib" "gdi32.lib" "opengl32.lib" "fast_obj.lib"
 
-REM Build Fast OBJ as seperate to avoid name collisions
-call cl /c -Fefast_obj %opts% "..\deps\fast_obj\fast_obj.c"
-call lib fast_obj.obj
+if not exist fast_obj.lib (
+    REM Build Fast OBJ as seperate to avoid name collisions
+    call cl /c -Fefast_obj "..\deps\fast_obj\fast_obj.c"
+    call lib fast_obj.obj
+)
 
 REM Buld game module
 call cl %opts% -Fegame_module "..\src\orchard.c" -LD /link %links% -PDB:game_module_%random%.pdb -EXPORT:tick_game -EXPORT:init_game -EXPORT:shutdown_game

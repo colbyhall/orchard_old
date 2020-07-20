@@ -11,6 +11,20 @@
 #define STB_TRUETYPE_IMPLEMENTATION
 #include <stb/stb_truetype.h>
 
+typedef struct Draw_State {
+    Framebuffer back_buffer;
+    Framebuffer hdr_buffer;
+    Framebuffer g_buffer;
+
+    Matrix4 projection_matrix;
+    Matrix4 view_matrix;
+    Matrix4 model_matrix;
+
+    b32 is_initialized;
+} Draw_State;
+
+static Draw_State* draw_state = 0;
+
 b32 upload_mesh(Mesh* m) {
     glGenVertexArrays(1, &m->vao);
     glBindVertexArray(m->vao);
@@ -26,8 +40,9 @@ b32 upload_mesh(Mesh* m) {
 }
 
 void draw_mesh(Mesh* m, Vector3 position, Quaternion rotation, Vector3 scale) {
-    Matrix4 model = m4_mul(m4_mul(m4_translate(position), m4_rotate(rotation)), m4_scale(scale));
-    set_uniform_m4("model", model);
+    draw_state->model_matrix = m4_mul(m4_mul(m4_translate(position), m4_rotate(rotation)), m4_scale(scale));
+    refresh_shader_transform();
+
     set_uniform_v4("color", v4s(1.f));
 
     glBindVertexArray(m->vao);
@@ -64,9 +79,9 @@ b32 init_font_collection(u8* data, int len, Allocator asset_memory, Font_Collect
     
     int glyphs_found = 0;
     // Ask STBTT for the glyph indices.
-    // @Temporary: linearly search the codepoint space because STBTT doesn't expose CP->glyph idx;
-    //             later we will parse the ttf file in a similar way to STBTT.
-    //             Linear search is exactly 17 times slower than parsing for 65536 glyphs.
+    // @TODO(colby): linearly search the codepoint space because STBTT doesn't expose CP->glyph idx;
+    //               later we will parse the ttf file in a similar way to STBTT.
+    //               Linear search is exactly 17 times slower than parsing for 65536 glyphs.
     for (int codepoint = 0; codepoint < 0x110000; ++codepoint) {
         const int idx = stbtt_FindGlyphIndex(&collection->info, codepoint);
         if (idx <= 0) continue;
@@ -74,31 +89,18 @@ b32 init_font_collection(u8* data, int len, Allocator asset_memory, Font_Collect
         collection->codepoint_indices[idx] = codepoint;
     }
 
-    // Find the atlas area
-    f32 atlas_area = 0.f;
-    for (int i = 0; i < collection->codepoint_count; ++i) {
-        int x0, x1, y0, y1;
-        stbtt_GetGlyphBox(&collection->info, i, &x0, &y0, &x1, &y1);
-
-        const f32 width  = (f32)(x1 - x0);
-        const f32 height = (f32)(y1 - y0);
-
-        atlas_area += width * height;
-    }
-    collection->atlas_area = atlas_area;
     collection->asset_memory = asset_memory;
 
     return true;
 }
 
+#define FONT_ATLAS_SIZE 4096
 Font* font_at_size(Font_Collection* collection, int size) {
     size = CLAMP(size, 2, 512);
 
     for (int i = 0; i < collection->font_count; ++i) {
         Font* const f = &collection->fonts[i];
-        if (f->size == size) {
-            return f;
-        }
+        if (f->size == size) return f;
     }
 
     assert(collection->font_count + 1 < FONT_CAP);
@@ -134,25 +136,9 @@ Font* font_at_size(Font_Collection* collection, int size) {
     }
 
     Texture2d* const atlas = &f->atlas;
-    atlas->depth = 1;
-
-    // @Cleanup @Cleanup @Cleanup
-    if (size <= 12) {
-        atlas->width  = 512 * h_oversample;
-        atlas->height = 512 * v_oversample;
-    } else {
-        f32 area = collection->atlas_area * h_oversample * v_oversample;
-        area *= 1.f + 1.f / sqrtf((f32)size); // fudge factor for small sizes
-        area *= font_scale * font_scale;
-
-        const f32 root = sqrtf(area);
-
-        u32 atlas_dimension = (u32)root;
-        atlas_dimension = (atlas_dimension + 127) & ~127;
-
-        atlas->width  = atlas_dimension;
-        atlas->height = atlas_dimension;
-    }
+    atlas->depth  = 1;
+    atlas->width  = FONT_ATLAS_SIZE;
+    atlas->height = FONT_ATLAS_SIZE;
 
     atlas->pixels = mem_alloc_array(collection->asset_memory, u8, atlas->width * atlas->height); // @Leak
 
@@ -218,46 +204,24 @@ typedef struct Immediate_Renderer {
     GLuint vao, vbo;
     Immediate_Vertex vertices[MAX_IMM_VERTS];
     int vertex_count;
-
-    Matrix4 projection;
-    Matrix4 view;
-
-    b32 is_initialized;
 } Immediate_Renderer;
-static Immediate_Renderer* g_imm_renderer = 0;
-
-static Framebuffer* g_back_buffer;
-#define BACK_BUFFER_WIDTH   512
-#define BACK_BUFFER_HEIGHT  288
-
-Shader* g_solid_shape_shader = 0;
-Shader* g_solid_shape_geometry_shader = 0;
-Shader* g_solid_shape_lighting_shader = 0;
-Shader* g_font_shader = 0;
+static Immediate_Renderer* imm_renderer = 0;
 
 #define FAR_CLIP_PLANE 1000.f
-#define NEAR_CLIP_PLANE 0.1
+#define NEAR_CLIP_PLANE 0.001f
 
+void init_draw(Platform* platform) {
+    imm_renderer      = mem_alloc_struct(platform->permanent_arena, Immediate_Renderer);
+    draw_state        = mem_alloc_struct(platform->permanent_arena, Draw_State);
 
-void init_draw(Allocator allocator) {
-    g_imm_renderer      = mem_alloc_struct(allocator, Immediate_Renderer);
-    g_back_buffer       = mem_alloc_struct(allocator, Framebuffer);
-    g_font_collection   = mem_alloc_struct(allocator, Font_Collection);
+    if (draw_state->is_initialized) return;
+    draw_state->is_initialized = true;
 
-    g_solid_shape_shader = find_shader(string_from_raw("assets/shaders/solid_shape_forward"));
-    g_solid_shape_geometry_shader = find_shader(string_from_raw("assets/shaders/solid_shape_geometry"));
-    g_solid_shape_lighting_shader = find_shader(string_from_raw("assets/shaders/solid_shape_lighting"));
-    g_font_shader = find_shader(string_from_raw("assets/shaders/font"));
+    glGenVertexArrays(1, &imm_renderer->vao);
+    glBindVertexArray(imm_renderer->vao);
 
-    if (g_imm_renderer->is_initialized) return;
-
-    glGenVertexArrays(1, &g_imm_renderer->vao);
-    glBindVertexArray(g_imm_renderer->vao);
-
-    glGenBuffers(1, &g_imm_renderer->vbo);
-    glBindBuffer(GL_ARRAY_BUFFER, g_imm_renderer->vbo);
-
-    glBindVertexArray(0);
+    glGenBuffers(1, &imm_renderer->vbo);
+    glBindBuffer(GL_ARRAY_BUFFER, imm_renderer->vbo);
 
     glEnable(GL_FRAMEBUFFER_SRGB); 
     glDepthMask(GL_TRUE);
@@ -272,68 +236,75 @@ void init_draw(Allocator allocator) {
 
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    g_imm_renderer->is_initialized = true;
 
-    set_shader(g_solid_shape_shader);
-
-    if (!init_framebuffer(BACK_BUFFER_WIDTH, BACK_BUFFER_HEIGHT, FF_GBuffer, g_back_buffer)) assert(false);
-
-    String font_file;
-    if (!read_file_into_string(string_from_raw("assets\\fonts\\consola.ttf"), &font_file, allocator)) assert(false);
-
-    if (!init_font_collection(expand_string(font_file), allocator, g_font_collection)) assert(false);
+    b32 ok = init_framebuffer(
+        g_platform->window_width, 
+        g_platform->window_height, 
+        FF_GBuffer, 
+        &draw_state->back_buffer
+    );
+    assert(ok);
 }
 
-void imm_refresh_transform(void) {
-    set_uniform_m4("view",         g_imm_renderer->view);
-    set_uniform_m4("projection",   g_imm_renderer->projection);
+void resize_draw(int new_width, int new_height) {
+    resize_framebuffer(&draw_state->g_buffer, new_width, new_height);
+    resize_framebuffer(&draw_state->hdr_buffer, new_width, new_height);
+    resize_framebuffer(&draw_state->back_buffer, new_width, new_height);
 }
 
-void imm_draw_right_handed(Rect viewport) {
+void refresh_shader_transform(void) {
+    set_uniform_m4("view",         draw_state->view_matrix);
+    set_uniform_m4("projection",   draw_state->projection_matrix);
+    set_uniform_m4("model",        draw_state->model_matrix);
+}
+
+void draw_right_handed(Rect viewport) {
     const Vector2 draw_size = rect_size(viewport);
-    const f32 aspect_ratio = draw_size.width / draw_size.height;
-    const f32 ortho_size = draw_size.height / 2.f;
+    const f32 aspect_ratio  = draw_size.width / draw_size.height;
+    const f32 ortho_size    = draw_size.height / 2.f;
 
-    g_imm_renderer->projection  = m4_ortho(ortho_size, aspect_ratio, FAR_CLIP_PLANE, NEAR_CLIP_PLANE);
-    g_imm_renderer->view        = m4_translate(v3(-draw_size.width / 2.f, -ortho_size, 0.f));
+    draw_state->projection_matrix = m4_ortho(ortho_size, aspect_ratio, FAR_CLIP_PLANE, NEAR_CLIP_PLANE);
+    draw_state->view_matrix       = m4_translate(v3(-draw_size.width / 2.f, -ortho_size, 0.f));
+    draw_state->model_matrix      = m4_identity();
 
-    imm_refresh_transform();
+    refresh_shader_transform();
 }
 
-void imm_draw_ortho(Vector3 pos, f32 aspect_ratio, f32 ortho_size) {
-    g_imm_renderer->projection = m4_ortho(ortho_size, aspect_ratio, FAR_CLIP_PLANE, NEAR_CLIP_PLANE);
-    g_imm_renderer->view = m4_translate(v3_negate(pos));
-
-    imm_refresh_transform();
+static Matrix4 axis_correction(void) {
+    Matrix4 result = { 0 };
+    result.col_row[0][2] = -1.f;
+    result.col_row[1][0] = 1.f;
+    result.col_row[2][1] = 1.f;
+    result.col_row[3][3] = 1.f;
+    return result;
 }
 
-void imm_draw_from(Vector3 pos) {
-    pos.x = roundf(pos.x);
-    pos.y = roundf(pos.y);
-    pos.z = roundf(pos.z);
+static void draw_ortho(Vector3 pos, Quaternion rot, f32 aspect_ratio, f32 ortho_size) {
+    draw_state->projection_matrix = m4_ortho(ortho_size, aspect_ratio, FAR_CLIP_PLANE, NEAR_CLIP_PLANE);
+    draw_state->view_matrix       = m4_mul(m4_rotate(quat_inverse(rot)), m4_translate(v3_inverse(pos)));
+    draw_state->model_matrix      = m4_identity();
 
-    const f32 ortho_size    = (f32)BACK_BUFFER_HEIGHT / 2.f;
-    const f32 aspect_ratio = (f32)BACK_BUFFER_WIDTH / (f32)BACK_BUFFER_HEIGHT;
-    g_imm_renderer->projection = m4_ortho(ortho_size, aspect_ratio, FAR_CLIP_PLANE, NEAR_CLIP_PLANE);
-    g_imm_renderer->view = m4_translate(v3_negate(pos));    
-
-    imm_refresh_transform();
+    refresh_shader_transform();
 }
 
-void imm_draw_persp(Vector3 pos) {
-    pos.x = roundf(pos.x);
-    pos.y = roundf(pos.y);
-    pos.z = roundf(pos.z);
+void draw_persp(Vector3 pos, Quaternion rot, f32 aspect_ratio, f32 fov) {
+    draw_state->projection_matrix = m4_mul(m4_persp(fov, aspect_ratio, FAR_CLIP_PLANE, NEAR_CLIP_PLANE), axis_correction());
+    draw_state->view_matrix       = m4_mul(m4_rotate(quat_inverse(rot)), m4_translate(v3_inverse(pos)));
+    draw_state->model_matrix      = m4_identity();
 
-    const f32 aspect_ratio = (f32)BACK_BUFFER_WIDTH / (f32)BACK_BUFFER_HEIGHT;
-    g_imm_renderer->projection = m4_persp(90.f, aspect_ratio, FAR_CLIP_PLANE, NEAR_CLIP_PLANE);
-    g_imm_renderer->view = m4_translate(v3_negate(pos));
+    refresh_shader_transform();   
+}
 
-    imm_refresh_transform();   
+void draw_from(Vector3 pos) {
+    draw_state->projection_matrix = m4_ortho((f32)draw_state->back_buffer.height / 2.f, 16.f / 9.f, FAR_CLIP_PLANE, NEAR_CLIP_PLANE);
+    draw_state->view_matrix       = m4_translate(v3_inverse(pos));
+    draw_state->model_matrix      = m4_identity();
+
+    refresh_shader_transform();
 }
 
 void imm_begin(void) {
-    g_imm_renderer->vertex_count = 0;
+    imm_renderer->vertex_count = 0;
 }
 
 void imm_flush(void) {
@@ -348,13 +319,13 @@ void imm_flush(void) {
     }
     thrown_bound_shader_error = false;
 
-    glBindVertexArray(g_imm_renderer->vao);
-    glBindBuffer(GL_ARRAY_BUFFER, g_imm_renderer->vbo);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(g_imm_renderer->vertices[0]) * g_imm_renderer->vertex_count, g_imm_renderer->vertices, GL_STREAM_DRAW);
+    glBindVertexArray(imm_renderer->vao);
+    glBindBuffer(GL_ARRAY_BUFFER, imm_renderer->vbo);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(imm_renderer->vertices[0]) * imm_renderer->vertex_count, imm_renderer->vertices, GL_STREAM_DRAW);
 
     set_imm_vertex_format();
     
-    glDrawArrays(GL_TRIANGLES, 0, g_imm_renderer->vertex_count);
+    glDrawArrays(GL_TRIANGLES, 0, imm_renderer->vertex_count);
 }
 
 void set_imm_vertex_format(void) {
@@ -376,9 +347,11 @@ void set_imm_vertex_format(void) {
 }
 
 void begin_draw(void) {
-    begin_framebuffer(*g_back_buffer);
+    begin_framebuffer(draw_state->back_buffer);
     clear_framebuffer(v3s(0.01f));
-    set_shader(g_solid_shape_geometry_shader);
+
+    Shader* const s = find_shader(from_cstr("assets/shaders/solid_shape_geometry"));
+    set_shader(s);
 }
 
 void end_draw(void) {
@@ -387,41 +360,25 @@ void end_draw(void) {
     clear_framebuffer(v3s(0.f));
     glViewport(0, 0, g_platform->window_width, g_platform->window_height);
 
-    set_shader(g_solid_shape_lighting_shader);
-    set_uniform_texture("diffuse_tex", g_back_buffer->color[FCI_Diffuse]);
+    Shader* const s = find_shader(from_cstr("assets/shaders/solid_shape_lighting"));
+    set_shader(s);
+    set_uniform_texture("diffuse_tex", draw_state->back_buffer.color[FCI_Albedo]);
 
     const Rect viewport = { v2z(), v2((f32)g_platform->window_width, (f32)g_platform->window_height) };
-    const f32 viewport_aspect_ratio = viewport.max.width / viewport.max.height;
-    const f32 back_buffer_aspect_ratio = (f32)BACK_BUFFER_WIDTH / (f32)BACK_BUFFER_HEIGHT;
-
-    imm_draw_ortho(v3z(), viewport_aspect_ratio, viewport.max.height / 2.f);
-
-    Rect draw_rect;
-    if (viewport_aspect_ratio >= back_buffer_aspect_ratio) {
-        draw_rect = rect_from_pos(v2z(), v2(
-            viewport.max.height * back_buffer_aspect_ratio, 
-            viewport.max.height
-        ));
-    } else {
-        const f32 ratio = (f32)BACK_BUFFER_HEIGHT / (f32)BACK_BUFFER_WIDTH;
-        draw_rect = rect_from_pos(v2z(), v2(
-            viewport.max.width, 
-            viewport.max.width * ratio
-        ));
-    }
+    draw_right_handed(viewport);
 
     imm_begin();
-    imm_textured_rect(draw_rect, -5.f, v2z(), v2s(1.f), v4s(1.f));
+    imm_textured_rect(viewport, -5.f, v2z(), v2s(1.f), v4s(1.f));
     imm_flush();
 }
 
 void imm_vertex(Vector3 position, Vector3 normal, Vector2 uv, Vector4 color) {
-    if (g_imm_renderer->vertex_count >= MAX_IMM_VERTS - 1) {
+    if (imm_renderer->vertex_count >= MAX_IMM_VERTS - 1) {
         imm_flush();
         imm_begin();
     }
 
-    Immediate_Vertex* const this_vertex = g_imm_renderer->vertices + g_imm_renderer->vertex_count++;
+    Immediate_Vertex* const this_vertex = imm_renderer->vertices + imm_renderer->vertex_count++;
     *this_vertex = (Immediate_Vertex) { position, normal, uv, color };
 }
 
@@ -445,10 +402,6 @@ void imm_textured_rect(Rect rect, f32 z, Vector2 uv0, Vector2 uv1, Vector4 color
     imm_vertex(bottom_left_pos, normal, bottom_left_uv, color);
     imm_vertex(bottom_right_pos, normal, bottom_right_uv, color);
     imm_vertex(top_right_pos, normal, top_right_uv, color);
-}
-
-void imm_rect(Rect rect, f32 z, Vector4 color) {
-    imm_textured_rect(rect, z, v2s(-1.f), v2s(-1.f), color);
 }
 
 void imm_textured_border_rect(Rect rect, f32 z, f32 thickness, Vector2 uv0, Vector2 uv1, Vector4 color) {
@@ -484,10 +437,6 @@ void imm_textured_border_rect(Rect rect, f32 z, f32 thickness, Vector2 uv0, Vect
     }
 }
 
-void imm_border_rect(Rect rect, f32 z, f32 thickness, Vector4 color) {
-    imm_textured_border_rect(rect, z, thickness, v2s(-1.f), v2s(-1.f), color);
-}
-
 void imm_textured_line(Vector2 a1, Vector2 a2, f32 z, f32 thickness, Vector2 uv0, Vector2 uv1, Vector4 color) {
     const f32 height    = thickness / 2.f;
     const Vector2 dir   = v2_norm(v2_sub(a2, a1));
@@ -514,10 +463,6 @@ void imm_textured_line(Vector2 a1, Vector2 a2, f32 z, f32 thickness, Vector2 uv0
     imm_vertex(top_right, normal, top_right_uv, color);
 }
 
-void imm_line(Vector2 a1, Vector2 a2, f32 z, f32 thickness, Vector4 color) {
-    imm_textured_line(a1, a2, z, thickness, v2s(-1.f), v2s(-1.f), color);
-}
-
 void imm_arrow(Vector2 a1, Vector2 a2, f32 z, f32 thickness, Vector4 color) {
     const f32 height = thickness * 2.f;
     const Vector2 dir = v2_norm(v2_sub(a1, a2));
@@ -530,6 +475,29 @@ void imm_arrow(Vector2 a1, Vector2 a2, f32 z, f32 thickness, Vector4 color) {
     imm_line(a2, l2, z, thickness, color);
     imm_line(a2, r2, z, thickness, color);
     imm_line(a1, a2, z, thickness, color);
+}
+
+void imm_textured_circle(f32 radius, int segments, Vector2 xy, f32 z, Vector2 uv0, Vector2 uv1, Vector4 color) {
+    assert(segments >= 3);
+
+    const f32 offset = (4.f * PI) / (f32)segments;
+    f32 theta = 0.f;
+    for (int i = 0; i < segments; ++i) {
+        const Vector2 dir0 = v2rad(theta);
+        const Vector2 dir1 = v2rad(theta + offset);
+
+        const Vector3 p0 = v3xy(xy, z);
+        const Vector3 p1 = v3xy(v2_add(p0.xy, v2_mul(dir0, v2s(radius))), z);
+        const Vector3 p2 = v3xy(v2_add(p0.xy, v2_mul(dir1, v2s(radius))), z);
+
+        const Vector3 normal = v3z(); // @Incomplete
+
+        imm_vertex(p0, normal, uv0, color);
+        imm_vertex(p1, normal, uv0, color);
+        imm_vertex(p2, normal, uv0, color);
+
+        theta += offset;
+    }
 }
 
 void imm_glyph(Font_Glyph* g, Font* font, Vector2 xy, f32 z, Vector4 color) {
@@ -586,17 +554,17 @@ void imm_string(String str, Font* font, f32 max_width, Vector2 xy, f32 z, Vector
 
 void imm_textured_plane(Vector3 pos, Quaternion rot, Rect rect, Vector2 uv0, Vector2 uv1, Vector4 color) {
     Vector3 right = quat_right(rot);
-    Vector3 up    = quat_up(rot);
+    Vector3 forward = quat_forward(rot);
 
     const Vector3 left = v3_mul(right, v3s(rect.min.x));
-    const Vector3 down = v3_mul(up, v3s(rect.min.y));
+    const Vector3 back = v3_mul(forward, v3s(rect.min.y));
     right = v3_mul(right, v3s(rect.max.x));
-    up    = v3_mul(up, v3s(rect.max.y));
+    forward  = v3_mul(forward, v3s(rect.max.y));
 
-    const Vector3 top_left_pos      = v3_add(pos, v3_add(up, left));
-    const Vector3 top_right_pos     = v3_add(pos, v3_add(up, right));
-    const Vector3 bottom_left_pos   = v3_add(pos, v3_add(down, left));
-    const Vector3 bottom_right_pos  = v3_add(pos, v3_add(down, right));
+    const Vector3 top_left_pos      = v3_add(pos, v3_add(forward, left));
+    const Vector3 top_right_pos     = v3_add(pos, v3_add(forward, right));
+    const Vector3 bottom_left_pos   = v3_add(pos, v3_add(back, left));
+    const Vector3 bottom_right_pos  = v3_add(pos, v3_add(back, right));
 
     const Vector2 top_left_uv       = v2(uv0.x, uv1.y);
     const Vector2 top_right_uv      = v2(uv1.x, uv1.y);

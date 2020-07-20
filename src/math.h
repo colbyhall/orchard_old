@@ -83,7 +83,7 @@ inline Vector3 v3_norm(Vector3 a) {
 }
 
 inline f32 v3_dot(Vector3 a, Vector3 b) { return a.x * b.x + a.y * b.y + a.z * b.z; }
-inline Vector3 v3_negate(Vector3 a) { return v3(-a.x, -a.y, -a.z); }
+inline Vector3 v3_inverse(Vector3 a) { return v3(-a.x, -a.y, -a.z); }
 inline Vector3 v3_cross(Vector3 a, Vector3 b) {
     return v3(
         a.y * b.z - a.z * b.y,
@@ -122,7 +122,7 @@ Quaternion quat_from_axis_angle(Vector3 axis, f32 angle_rad);
 Quaternion quat_from_euler_angles(f32 roll, f32 pitch, f32 yaw);
 
 inline f32 quat_len_sq(Quaternion a) { return a.x * a.x + a.y * a.y + a.z * a.z + a.w * a.w; }
-inline f32 quat_len(Quaternion a) { sqrtf(quat_len_sq(a)); }
+inline f32 quat_len(Quaternion a) { return sqrtf(quat_len_sq(a)); }
 
 inline Quaternion quat_norm(Quaternion a) {
     const f32 scale = 1.f / quat_len(a);
@@ -133,6 +133,8 @@ Vector3 rotate_vector_with_quat(Vector3 a, Quaternion b);
 inline Vector3 quat_forward(Quaternion a) { return rotate_vector_with_quat(v3_forward, a); }
 inline Vector3 quat_right(Quaternion a) { return rotate_vector_with_quat(v3_right, a); }
 inline Vector3 quat_up(Quaternion a) { return rotate_vector_with_quat(v3_up, a); }
+
+inline Quaternion quat_inverse(Quaternion a) { return (Quaternion) { -a.x, -a.y, -a.z, a.w }; }
 
 typedef union Matrix4 {
     f32 col_row[4][4];

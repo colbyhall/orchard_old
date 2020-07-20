@@ -9,6 +9,16 @@ WGL_Swap_Interval_Ext wglSwapIntervalEXT = 0;
 
 extern OpenGL_Context* g_gl_context;
 
+static void gl_message_callback(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar* message, const void* user_param) {
+    switch (severity) {
+    case GL_DEBUG_SEVERITY_HIGH:
+    case GL_DEBUG_SEVERITY_MEDIUM:
+    case GL_DEBUG_SEVERITY_LOW:
+        o_log_error("[OpenGL] %s", message);
+        break;
+    }
+}
+
 b32 init_opengl(Platform* platform) {
     Allocator arena = platform->permanent_arena;
 
@@ -114,6 +124,23 @@ b32 init_opengl(Platform* platform) {
     g_gl_context->is_initialized = true;
 
     o_log_verbose("[OpenGL] Loaded opengl with version %i:%i.", g_gl_context->maj_version, g_gl_context->min_version);
+
+    glEnable(GL_FRAMEBUFFER_SRGB); 
+    glDepthMask(GL_TRUE);
+    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+    glDepthFunc(GL_LEQUAL);
+    glEnable(GL_DEPTH_TEST);
+    glClearDepth(1.f);
+    
+    glEnable(GL_CULL_FACE);
+    glCullFace(GL_BACK);
+    glFrontFace(GL_CCW);
+
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    glEnable(GL_DEBUG_OUTPUT);
+    glDebugMessageCallback(gl_message_callback, 0);
 
     return true;
 }

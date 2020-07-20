@@ -247,7 +247,7 @@ typedef struct String {
     Allocator allocator;
 } String;
 
-#define string_from_raw(cstr) (String) { (u8*)cstr, (int)str_len(cstr), null_allocator() }
+#define from_cstr(cstr) (String) { (u8*)cstr, (int)str_len(cstr), null_allocator() }
 #define expand_string(str) str.data, str.len 
 
 typedef struct Rune_Iterator {
