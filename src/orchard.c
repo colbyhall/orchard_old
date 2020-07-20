@@ -159,7 +159,7 @@ static void regen_map(Entity_Manager* em, Random_Seed seed) {
 
                     const f32 final_x = (f32)(x * CHUNK_SIZE) + (f32)jx;
                     const f32 final_y = (f32)(y * CHUNK_SIZE) + (f32)jy;
-                    const f32 noise = perlin_get_2d(seed, final_x, final_y, 0.1f, 4);
+                    const f32 noise   = perlin_get_2d(seed, final_x, final_y, 0.1f, 4);
 
                     tile->type = (noise > 0.65f) + 1;
                 }
@@ -223,8 +223,14 @@ DLL_EXPORT void tick_game(f32 dt) {
         Font* const font = font_at_size(fc, 48);
         set_uniform_texture("atlas", font->atlas);
 
-        char buffer[2048];
-        sprintf(buffer, "Cam Pos: %fx %fy\nOrtho Size: %f", g_game_state->cam_pos.x, g_game_state->cam_pos.y, g_game_state->current_ortho_size);
+        char buffer[512];
+        sprintf(
+            buffer, 
+            "Cam Pos: %f %f\nOrtho Size: %f", 
+            g_game_state->cam_pos.x, 
+            g_game_state->cam_pos.y, 
+            g_game_state->current_ortho_size
+        );
 
         imm_begin();
         imm_string(from_cstr(buffer), font, 100000.f, v2(0.f, viewport.max.y - 48.f), -4.f, v4s(1.f));
