@@ -29,7 +29,7 @@ uniform sampler2D diffuse;
 void main() {
     if (frag_uv.x > -1.0) {
         vec4 sample = texture(diffuse, frag_uv);
-        final_color = vec4(frag_color.xyz, sample.r);
+        final_color = sample;
     } else {
         final_color = frag_color;
     }

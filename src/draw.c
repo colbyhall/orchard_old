@@ -548,12 +548,13 @@ void imm_textured_plane(Vector3 pos, Quaternion rot, Rect rect, Vector2 uv0, Vec
 
 void draw_game(Game_State* game_state) {
     glViewport(0, 0, g_platform->window_width, g_platform->window_height);
-    clear_framebuffer(v3s(0.001f));
+    clear_framebuffer(v3s(0.01f));
 
     Entity_Manager* const em = &game_state->entity_manager;
 
     // Draw the tilemap
     set_shader(find_shader(from_cstr("assets/shaders/basic2d")));
+    set_uniform_texture("diffuse", *find_texture2d(from_cstr("assets/sprites/terrain_map")));
     draw_from(game_state->cam_pos, game_state->current_ortho_size);
     for (int i = 0; i < em->chunk_count; ++i) {
         Chunk* const chunk = &em->chunks[i];
@@ -566,8 +567,12 @@ void draw_game(Game_State* game_state) {
 
                 const Vector2 min = v2_add(pos, v2((f32)x, (f32)y));
                 const Vector2 max = v2_add(min, v2s(1.f));
-                const Vector4 color = tile->type == TT_Grass ? color_from_hex(0x668D3CFF) : color_from_hex(0x816C5BFF);
-                imm_rect((Rect) { min, max }, -5.f - (f32)chunk->z, color);
+
+                const f32 tile_size = 32;
+                const Vector2 uv0 = tile->type == TT_Grass ? v2z() : v2(tile_size / 512.f, 0.f);
+                const Vector2 uv1 = tile->type == TT_Grass ? v2s(tile_size / 512.f) : v2((tile_size / 512.f) * 2.f, tile_size / 512.f);
+
+                imm_textured_rect((Rect) { min, max }, -5.f - (f32)chunk->z, uv0, uv1, v4s(1.f));
             }
         }
         imm_flush();

@@ -151,14 +151,14 @@ static void regen_map(Entity_Manager* em, u64 seed) {
             chunk->z = 0;
             chunk->id = em->last_chunk_id++;
 
-            seed = ((seed * 214012342343 + 2531012342341) >> 16) & 0x7ffffffff;
 
             b32 did = false;
             for (int i = 0; i < CHUNK_SIZE * CHUNK_SIZE; ++i) {
                 did = !did;
                 Tile* const tile = &chunk->tiles[i];
-                tile->type = (seed & ) + 1;
-                seed += seed & 0x000000FFFFFFFFFF;
+                
+                seed = ((seed * 214012342343 + 2531012342341) >> 16) & 0x7ffffffff;
+                tile->type = (seed & 2) + 1;
             }
         }
     }
@@ -194,7 +194,7 @@ DLL_EXPORT void tick_game(f32 dt) {
     }
 
     const f32 mouse_wheel_delta = (f32)g_platform->input.state.mouse_wheel_delta / 50.f;
-    g_game_state->target_ortho_size += mouse_wheel_delta;
+    g_game_state->target_ortho_size -= mouse_wheel_delta;
     g_game_state->target_ortho_size = CLAMP(g_game_state->target_ortho_size, 10.f, 50.f);
 
     g_game_state->current_ortho_size = lerpf(g_game_state->current_ortho_size, g_game_state->target_ortho_size, dt * 5.f);

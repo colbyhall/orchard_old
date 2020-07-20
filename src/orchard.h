@@ -28,7 +28,7 @@ typedef struct Chunk {
     Chunk_Id id;
 } Chunk;
 
-#define CHUNK_CAP 12
+#define CHUNK_CAP 64
 typedef struct Entity_Manager {
     int chunk_count;
     Chunk chunks[CHUNK_CAP];
