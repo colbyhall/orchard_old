@@ -78,7 +78,7 @@ typedef PLATFORM_LOCAL_TIME(Platform_Local_Time);
 #define PLATFORM_CYCLES(name) u64 name(void)
 typedef PLATFORM_CYCLES(Platform_Cycles);
 
-#define PLATFORM_TIME_IN_SECONDS(name) f32 name(void)
+#define PLATFORM_TIME_IN_SECONDS(name) f64 name(void)
 typedef PLATFORM_TIME_IN_SECONDS(Platform_Time_In_Seconds);
 
 typedef enum OS_Event_Type {

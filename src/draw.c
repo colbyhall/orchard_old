@@ -556,30 +556,39 @@ void draw_game(Game_State* game_state) {
     set_shader(find_shader(from_cstr("assets/shaders/basic2d")));
     set_uniform_texture("diffuse", *find_texture2d(from_cstr("assets/sprites/terrain_map")));
     draw_from(game_state->cam_pos, game_state->current_ortho_size);
+
+    const f32 ratio = (game_state->current_ortho_size * 2.f) / (f32)g_platform->window_height;
+    const f32 adjusted_width = (f32)g_platform->window_width * ratio;
+    const f32 adjusted_height = (f32)g_platform->window_height * ratio;
+
+    const Rect viewport_in_world_space = rect_from_pos(game_state->cam_pos, v2(adjusted_width, adjusted_height));
+    
     for (int i = 0; i < em->chunk_count; ++i) {
         Chunk* const chunk = &em->chunks[i];
         
-        Vector2 pos = v2((f32)(chunk->x * CHUNK_SIZE), (f32)(chunk->y * CHUNK_SIZE));
+        const Vector2 min = v2((f32)chunk->x * CHUNK_SIZE, (f32)chunk->y * CHUNK_SIZE);
+        const Vector2 max = v2_add(min, v2(CHUNK_SIZE, CHUNK_SIZE));
+        const Rect chunk_rect = { min, max };
+
+        if (!rect_overlaps_rect(viewport_in_world_space, chunk_rect, 0)) continue;
+
         imm_begin();
+        const Vector2 pos = v2((f32)(chunk->x * CHUNK_SIZE), (f32)(chunk->y * CHUNK_SIZE));
         for (int x = 0; x < CHUNK_SIZE; ++x) {
             for (int y = 0; y < CHUNK_SIZE; ++y) {
                 Tile* const tile = &chunk->tiles[x + y * CHUNK_SIZE];
 
-                const Vector2 min = v2_add(pos, v2((f32)x, (f32)y));
-                const Vector2 max = v2_add(min, v2s(1.f));
+                const Vector2 tmin = v2_add(pos, v2((f32)x, (f32)y));
+                const Vector2 tmax = v2_add(tmin, v2s(1.f));
 
                 const f32 tile_size = 32;
                 const Vector2 uv0 = tile->type == TT_Grass ? v2z() : v2(tile_size / 512.f, 0.f);
                 const Vector2 uv1 = tile->type == TT_Grass ? v2s(tile_size / 512.f) : v2((tile_size / 512.f) * 2.f, tile_size / 512.f);
 
-                const Rect rect = { min, max };
+                const Rect rect = { tmin, tmax };
                 imm_textured_rect(rect, -5.f - (f32)chunk->z, uv0, uv1, v4s(1.f));
             }
         }
         imm_flush();
     }
-    
-    imm_begin();
-    imm_rect(rect_from_pos(mouse_pos_in_world_space(), v2s(1.f)), -2.f, v4s(1.f));
-    imm_flush();
 }

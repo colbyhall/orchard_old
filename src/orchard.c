@@ -139,6 +139,18 @@ u64 hash_string(void* a, void* b, int size) {
 
 static Game_State* g_game_state;
 
+static Entity_Manager make_entity_manager(Allocator allocator) {
+    Entity_Manager result = { .tile_memory = allocator, .chunk_count = CHUNK_CAP, };
+
+    for (int i = 0; i < result.chunk_count; ++i) {
+        Chunk* const chunk = &result.chunks[i];
+
+        chunk->tiles = mem_alloc_array(allocator, Tile, CHUNK_SIZE * CHUNK_SIZE);
+    }
+
+    return result;
+}
+
 static void regen_map(Entity_Manager* em, Random_Seed seed) {
     // *em = (Entity_Manager) { 0 };
 
@@ -147,11 +159,10 @@ static void regen_map(Entity_Manager* em, Random_Seed seed) {
     const int chunk_cap_sq = (int)sqrt(CHUNK_CAP);
     for (int x = 0; x < chunk_cap_sq; ++x) {
         for (int y = 0; y < chunk_cap_sq; ++y) {
-            Chunk* const chunk = &em->chunks[em->chunk_count++];
+            Chunk* const chunk = &em->chunks[x + y * chunk_cap_sq];
             chunk->x = x;
             chunk->y = y;
             chunk->z = 0;
-            chunk->id = em->last_chunk_id++;
 
             for (int jx = 0; jx < CHUNK_SIZE; ++jx) {
                 for (int jy = 0; jy < CHUNK_SIZE; ++jy) {
@@ -186,6 +197,7 @@ DLL_EXPORT void init_game(Platform* platform) {
 
     // Init Game State
     g_game_state = mem_alloc_struct(platform->permanent_arena, Game_State);
+    g_game_state->entity_manager = make_entity_manager(platform->permanent_arena);
     if (g_game_state->is_initialized) return;
     g_game_state->is_initialized = true;
 
@@ -228,7 +240,9 @@ DLL_EXPORT void tick_game(f32 dt) {
         g_game_state->cam_pos = v2_add(g_game_state->cam_pos, v2_mul(v2_inverse(mouse_delta), v2s(speed)));
     }
 
+    const f64 before_draw = g_platform->time_in_seconds();
     draw_game(g_game_state);
+    const f64 draw_duration = g_platform->time_in_seconds() - before_draw;
 
     {
         const Rect viewport = { v2z(), v2((f32)g_platform->window_width, (f32)g_platform->window_height) };
@@ -242,10 +256,12 @@ DLL_EXPORT void tick_game(f32 dt) {
         char buffer[512];
         sprintf(
             buffer, 
-            "Cam Pos: %f %f\nOrtho Size: %f", 
+            "Cam Pos: %f %f\nOrtho Size: %f\nFPS: %f\nDraw Time: %ims", 
             g_game_state->cam_pos.x, 
             g_game_state->cam_pos.y, 
-            g_game_state->current_ortho_size
+            g_game_state->current_ortho_size,
+            1.f / dt,
+            (int)(draw_duration * 1000.0)
         );
 
         imm_begin();

@@ -7,7 +7,11 @@ typedef enum Tile_Type {
     TT_Air = 0,
     TT_Grass,
     TT_Dirt,
+    TT_Gravel,
+    TT_Stone,
+    TT_Sand,
     TT_Water,
+
     TT_Count,
 } Tile_Type;
 
@@ -15,24 +19,17 @@ typedef struct Tile {
     Tile_Type type;
 } Tile;
 
-enum Chunk_Flags {
-    CF_NeedsTick = (1 << 0),
-};
-
-typedef u32 Chunk_Id;
 #define CHUNK_SIZE 16
 typedef struct Chunk {
-    Tile tiles[CHUNK_SIZE * CHUNK_SIZE];
     int x, y, z;
-    int flags;
-    Chunk_Id id;
+    Tile* tiles; // Allocated elsewhere because we scan chunks for their pos in a list
 } Chunk;
 
-#define CHUNK_CAP 64
+#define CHUNK_CAP 256
 typedef struct Entity_Manager {
     int chunk_count;
     Chunk chunks[CHUNK_CAP];
-    Chunk_Id last_chunk_id;
+    Allocator tile_memory;
 } Entity_Manager;
 
 typedef struct Game_State {

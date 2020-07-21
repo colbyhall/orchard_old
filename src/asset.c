@@ -112,8 +112,6 @@ static b32 load_mesh(Asset* asset, String file, Allocator asset_memory) {
                 const float* const u = fast_obj_mesh->texcoords + index->t * 2;
                 const Vector2 uv = v2(u[0], u[1]);
 
-                const f32 time = g_platform->time_in_seconds();
-
                 Mesh_Vertex vertex = { position, normal, uv };
                 int* const found_indice = push_hash_table(&vertex_index_table, vertex, vertex_index_table.pair_count);
                 if (found_indice) found_indices[k] = *found_indice;
@@ -204,7 +202,7 @@ void init_asset_manager(Platform* platform) {
         Temp_Memory temp_memory = begin_temp_memory(platform->frame_arena);
         if (iter->type != DET_File) continue;
 
-        const f32 start_time = g_platform->time_in_seconds();
+        const f64 start_time = g_platform->time_in_seconds();
 
         const Asset_Type type = get_asset_type_from_path(iter->path);
         if (!type) continue;
@@ -228,8 +226,8 @@ void init_asset_manager(Platform* platform) {
                 o_log_error("[Asset] %s failed to initialize from path %s", asset_type_string[type], (const char*)iter->path.data); \
                 continue; \
             } else { \
-                const f32 duration = g_platform->time_in_seconds() - start_time; \
-                o_log("[Asset] took %ims to load %s from path %s", (int)(duration * 1000.f), asset_type_string[type], (const char*)iter->path.data); \
+                const f64 duration = g_platform->time_in_seconds() - start_time; \
+                o_log("[Asset] took %ims to load %s from path %s", (int)(duration * 1000.0), asset_type_string[type], (const char*)iter->path.data); \
             } \
             break;
         ASSET_TYPE_DEFINITION(LOAD_ASSET);

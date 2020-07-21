@@ -9,6 +9,10 @@
 #include <windows.h>
 #include <windowsx.h>
 
+// Use discrete GPU
+__declspec(dllexport) DWORD NvOptimusEnablement = 0x01;
+__declspec(dllexport) DWORD AmdPowerXpressRequestHighPerformance = 0x01;
+
 Platform* g_platform;
 
 static b32 is_running = true;
@@ -242,7 +246,7 @@ static PLATFORM_TIME_IN_SECONDS(win32_time_in_seconds) {
     LARGE_INTEGER time;
     QueryPerformanceCounter(&time);
 
-    return time.QuadPart / (f32)g_qpc_freq.QuadPart;
+    return (f64)time.QuadPart / (f64)g_qpc_freq.QuadPart;
 }
 
 #define push_os_event(t, ...) g_platform->events[g_platform->num_events++] = (OS_Event) { .type = t, __VA_ARGS__ }
