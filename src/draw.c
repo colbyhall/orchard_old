@@ -20,6 +20,8 @@ typedef struct Draw_State {
     Matrix4 view_matrix;
     Matrix4 model_matrix;
 
+    int num_draw_calls;
+
     b32 is_initialized;
 } Draw_State;
 
@@ -198,7 +200,7 @@ typedef struct Immediate_Vertex {
 } Immediate_Vertex;
 
 // Must be multiple of 3
-#define MAX_IMM_VERTS (1024 * 3)
+#define MAX_IMM_VERTS (4096 * 3)
 
 typedef struct Immediate_Renderer {
     GLuint vao, vbo;
@@ -316,6 +318,8 @@ void imm_flush(void) {
     set_imm_vertex_format();
     
     glDrawArrays(GL_TRIANGLES, 0, imm_renderer->vertex_count);
+
+    draw_state->num_draw_calls += 1;
 }
 
 void set_imm_vertex_format(void) {
@@ -337,7 +341,7 @@ void set_imm_vertex_format(void) {
 }
 
 void imm_vertex(Vector3 position, Vector3 normal, Vector2 uv, Vector4 color) {
-    if (imm_renderer->vertex_count >= MAX_IMM_VERTS - 1) {
+    if (imm_renderer->vertex_count == MAX_IMM_VERTS) {
         imm_flush();
         imm_begin();
     }
@@ -552,6 +556,8 @@ void draw_game(Game_State* game_state) {
 
     Entity_Manager* const em = &game_state->entity_manager;
 
+    draw_state->num_draw_calls = 0;
+
     // Draw the tilemap
     set_shader(find_shader(from_cstr("assets/shaders/basic2d")));
     set_uniform_texture("diffuse", *find_texture2d(from_cstr("assets/sprites/terrain_map")));
@@ -563,6 +569,7 @@ void draw_game(Game_State* game_state) {
 
     const Rect viewport_in_world_space = rect_from_pos(game_state->cam_pos, v2(adjusted_width, adjusted_height));
     
+    imm_begin();
     for (int i = 0; i < em->chunk_count; ++i) {
         Chunk* const chunk = &em->chunks[i];
         
@@ -572,7 +579,6 @@ void draw_game(Game_State* game_state) {
 
         if (!rect_overlaps_rect(viewport_in_world_space, chunk_rect, 0)) continue;
 
-        imm_begin();
         const Vector2 pos = v2((f32)(chunk->x * CHUNK_SIZE), (f32)(chunk->y * CHUNK_SIZE));
         for (int x = 0; x < CHUNK_SIZE; ++x) {
             for (int y = 0; y < CHUNK_SIZE; ++y) {
@@ -589,6 +595,6 @@ void draw_game(Game_State* game_state) {
                 imm_textured_rect(rect, -5.f - (f32)chunk->z, uv0, uv1, v4s(1.f));
             }
         }
-        imm_flush();
     }
+    imm_flush();
 }

@@ -30,6 +30,8 @@ typedef struct Entity_Manager {
     int chunk_count;
     Chunk chunks[CHUNK_CAP];
     Allocator tile_memory;
+
+    
 } Entity_Manager;
 
 typedef struct Game_State {

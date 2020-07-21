@@ -142,6 +142,8 @@ b32 init_opengl(Platform* platform) {
     glEnable(GL_DEBUG_OUTPUT);
     glDebugMessageCallback(gl_message_callback, 0);
 
+    wglSwapIntervalEXT(1);
+
     return true;
 }
 

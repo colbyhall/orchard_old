@@ -253,15 +253,15 @@ DLL_EXPORT void tick_game(f32 dt) {
         Font* const font = font_at_size(fc, 48);
         set_uniform_texture("atlas", font->atlas);
 
+        const f64 precise_dt = g_platform->current_frame_time - g_platform->last_frame_time;
+
         char buffer[512];
         sprintf(
             buffer, 
-            "Cam Pos: %f %f\nOrtho Size: %f\nFPS: %f\nDraw Time: %ims", 
-            g_game_state->cam_pos.x, 
-            g_game_state->cam_pos.y, 
-            g_game_state->current_ortho_size,
-            1.f / dt,
-            (int)(draw_duration * 1000.0)
+            "Frame Time: %ims\nDraw Time: %ims\nDraw Calls: %i", 
+            (int)(precise_dt * 1000.0),
+            (int)(draw_duration * 1000.0),
+            draw_state->num_draw_calls
         );
 
         imm_begin();
