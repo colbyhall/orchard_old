@@ -168,6 +168,13 @@ static void regen_map(Entity_Manager* em, Random_Seed seed) {
     }
 }
 
+Vector2 mouse_pos_in_world_space(void) {
+    const f32 ratio = (g_game_state->current_ortho_size * 2.f) / (f32)g_platform->window_height;
+    const int adjusted_x = g_platform->input.state.mouse_x - g_platform->window_width / 2;
+    const int adjusted_y = g_platform->input.state.mouse_y - g_platform->window_height / 2;
+    return v2_add(v2_mul(v2((f32)adjusted_x, (f32)adjusted_y), v2s(ratio)), g_game_state->cam_pos);
+}
+
 DLL_EXPORT void init_game(Platform* platform) {
     g_platform = platform;
 
@@ -203,11 +210,20 @@ DLL_EXPORT void tick_game(f32 dt) {
     g_game_state->target_ortho_size -= mouse_wheel_delta;
     g_game_state->target_ortho_size = CLAMP(g_game_state->target_ortho_size, 5.f, 50.f);
 
+    const Vector2 old_mouse_pos_in_world = mouse_pos_in_world_space();
+
+    const f32 old_ortho_size = g_game_state->current_ortho_size;
     g_game_state->current_ortho_size = lerpf(g_game_state->current_ortho_size, g_game_state->target_ortho_size, dt * 5.f);
+    const f32 delta_ortho_size = g_game_state->current_ortho_size - old_ortho_size;
+
+    const Vector2 delta_mouse_pos_in_world = v2_sub(old_mouse_pos_in_world, mouse_pos_in_world_space());
+    if (delta_ortho_size != 0.f) g_game_state->cam_pos = v2_add(g_game_state->cam_pos, delta_mouse_pos_in_world);
+
+    const f32 ratio = (g_game_state->current_ortho_size * 2.f) / (f32)g_platform->window_height;
 
     if (g_platform->input.state.mouse_buttons_down[MOUSE_MIDDLE]) {
         const Vector2 mouse_delta = v2((f32)g_platform->input.state.mouse_dx, (f32)g_platform->input.state.mouse_dy);
-        const f32 speed = (g_game_state->current_ortho_size * 2.f) / (f32)g_platform->window_height;
+        const f32 speed = ratio;
 
         g_game_state->cam_pos = v2_add(g_game_state->cam_pos, v2_mul(v2_inverse(mouse_delta), v2s(speed)));
     }

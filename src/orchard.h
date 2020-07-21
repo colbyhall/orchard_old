@@ -45,4 +45,6 @@ typedef struct Game_State {
     b32 is_initialized;
 } Game_State;
 
+Vector2 mouse_pos_in_world_space(void);
+
 #endif /* ORCHARD_H */

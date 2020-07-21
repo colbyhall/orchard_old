@@ -578,13 +578,8 @@ void draw_game(Game_State* game_state) {
         }
         imm_flush();
     }
-
-    const f32 ratio = (game_state->current_ortho_size * 2.f) / (f32)g_platform->window_height;
-    const int adjusted_x = g_platform->input.state.mouse_x - g_platform->window_width / 2;
-    const int adjusted_y = g_platform->input.state.mouse_y - g_platform->window_height / 2;
-    const Vector2 mouse_pos_in_world = v2_add(v2_mul(v2((f32)adjusted_x, (f32)adjusted_y), v2s(ratio)), game_state->cam_pos);
     
     imm_begin();
-    imm_rect(rect_from_pos(mouse_pos_in_world, v2s(1.f)), -2.f, v4s(1.f));
+    imm_rect(rect_from_pos(mouse_pos_in_world_space(), v2s(1.f)), -2.f, v4s(1.f));
     imm_flush();
 }
