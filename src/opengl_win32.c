@@ -19,6 +19,10 @@ static void gl_message_callback(GLenum source, GLenum type, GLuint id, GLenum se
     }
 }
 
+// Use discrete GPU
+__declspec(dllexport) DWORD NvOptimusEnablement = 0x01;
+__declspec(dllexport) DWORD AmdPowerXpressRequestHighPerformance = 0x01;
+
 b32 init_opengl(Platform* platform) {
     Allocator arena = platform->permanent_arena;
 
@@ -142,7 +146,7 @@ b32 init_opengl(Platform* platform) {
     glEnable(GL_DEBUG_OUTPUT);
     glDebugMessageCallback(gl_message_callback, 0);
 
-    wglSwapIntervalEXT(1);
+    wglSwapIntervalEXT(0);
 
     return true;
 }

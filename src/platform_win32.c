@@ -9,10 +9,6 @@
 #include <windows.h>
 #include <windowsx.h>
 
-// Use discrete GPU
-__declspec(dllexport) DWORD NvOptimusEnablement = 0x01;
-__declspec(dllexport) DWORD AmdPowerXpressRequestHighPerformance = 0x01;
-
 Platform* g_platform;
 
 static b32 is_running = true;

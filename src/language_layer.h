@@ -202,7 +202,7 @@ typedef struct Memory_Arena {
 } Memory_Arena;
 
 Allocator arena_allocator_raw(void* base, usize size);
-Allocator arena_allocator(usize size, Allocator allocator);
+Allocator arena_allocator(Allocator allocator, usize size);
 inline void reset_arena(Allocator allocator) {
     Memory_Arena* const arena = allocator.data;
     arena->used = 0;
@@ -223,6 +223,20 @@ inline void end_temp_memory(Temp_Memory temp_mem) {
     assert(arena);
     arena->used = temp_mem.used;
 }
+
+typedef struct Pool_Bucket {
+    void* allocation;
+    int used;
+} Pool_Bucket;
+
+typedef struct Pool_Allocator {
+    Pool_Bucket* buckets;
+    int bucket_count;
+    int bucket_cap;
+    u8* memory;
+} Pool_Allocator;
+
+Allocator pool_allocator(Allocator allocator, int bucket_count, int bucket_size);
 
 typedef u32 Rune;
 

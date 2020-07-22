@@ -3,7 +3,6 @@
 
 #include "math.h"
 #include "opengl.h"
-#include "orchard.h"
 #include <stb/stb_truetype.h>
 
 typedef struct Mesh_Vertex {
@@ -94,7 +93,5 @@ inline void imm_plane(Vector3 pos, Quaternion rot, Rect rect, Vector4 color) { i
 
 void begin_clip_rect(Rect rect);
 void end_clip_rect(void);
-
-void draw_game(Game_State* game_state);
 
 #endif /* DRAW_H */

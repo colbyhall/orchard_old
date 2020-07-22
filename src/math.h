@@ -178,6 +178,7 @@ inline Vector2 rect_size(Rect a) { return v2_sub(a.max, a.min); }
 
 b32 rect_overlaps_rect(Rect a, Rect b, Rect* overlap);
 b32 rect_overlaps_point(Rect a, Vector2 b);
+inline Rect move_rect(Rect a, Vector2 offset) { return (Rect) { v2_add(a.min, offset), v2_add(a.max, offset) }; }
 
 b32 line_intersect_line(Vector2 a1, Vector2 a2, Vector2 b1, Vector2 b2, Vector2* intersection);
 
@@ -192,6 +193,20 @@ b32 rect_sweep_rect(Vector2 a1, Vector2 a2, Vector2 size, Rect b, Rect_Intersect
 typedef struct Random_Seed {
     u64 seed;
 } Random_Seed;
+
+inline Random_Seed iterate_seed(Random_Seed* seed) {
+    Random_Seed old = *seed;
+    seed->seed = (((seed->seed * 21401323442 + 2531011234234234) >> 16) & 0x7fff);
+    return old;
+}
+
+inline f32 get_random_f32(Random_Seed seed, f32 min, f32 max) {
+    const u64 some_max = 234152;
+    const u64 the_value = seed.seed & some_max;
+    const f32 normalized = (f32)the_value / (f32)some_max;
+    const f32 dist = max - min;
+    return normalized * dist + max;
+}
 
 f32 perlin_get_2d(Random_Seed seed, f32 x, f32 y, f32 freq, int depth);
 
