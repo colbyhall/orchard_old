@@ -38,7 +38,7 @@ inline f32 v2_len_sq(Vector2 a) { return a.x * a.x + a.y * a.y; }
 inline f32 v2_len(Vector2 a)    { return sqrtf(v2_len_sq(a)); }
 
 inline Vector2 v2_norm(Vector2 a) {
-    const f32 len = v2_len(a);
+    f32 len = v2_len(a);
     if (len > 0.f) return v2_div(a, v2s(len));
     return v2z();
 }
@@ -56,8 +56,8 @@ inline Vector2 v2_lerp(Vector2 a, Vector2 b, f32 t) {
 
 inline b32 v2_equal(Vector2 a, Vector2 b) { return a.x == b.x && a.y == b.y; }
 
-static const Vector2 v2_up     = { 0.f, 1.f };
-static const Vector2 v2_right  = { 1.f, 0.f };
+static Vector2 v2_up     = { 0.f, 1.f };
+static Vector2 v2_right  = { 1.f, 0.f };
 
 typedef union Vector3 {
     struct { f32 x, y, z; };
@@ -82,7 +82,7 @@ inline f32 v3_len_sq(Vector3 a) { return a.x * a.x + a.y * a.y + a.z * a.z; }
 inline f32 v3_len(Vector3 a) { return sqrtf(v3_len_sq(a)); }
 
 inline Vector3 v3_norm(Vector3 a) {
-    const f32 len = v3_len(a);
+    f32 len = v3_len(a);
     if (len > 0.f) return v3_div(a, v3s(len));
     return v3z();
 }
@@ -98,9 +98,9 @@ inline Vector3 v3_cross(Vector3 a, Vector3 b) {
 }
 inline b32 v3_equal(Vector3 a, Vector3 b) { return a.x == b.x && a.y == b.y && a.z == b.z; }
 
-static const Vector3 v3_forward = { 1.f, 0.f, 0.f };
-static const Vector3 v3_right   = { 0.f, 1.f, 0.f };
-static const Vector3 v3_up      = { 0.f, 0.f, 1.f };
+static Vector3 v3_forward = { 1.f, 0.f, 0.f };
+static Vector3 v3_right   = { 0.f, 1.f, 0.f };
+static Vector3 v3_up      = { 0.f, 0.f, 1.f };
 
 typedef union Vector4 {
     struct { f32 x, y, z, w; };
@@ -115,10 +115,10 @@ typedef union Vector4 {
 inline Vector4 v4(f32 x, f32 y, f32 z, f32 w) { return (Vector4) { x, y, z, w }; }
 inline Vector4 v4s(f32 s) { return v4(s, s, s, s); }
 inline Vector4 color_from_hex(int color) {
-    const u8 red   = (u8)((color & 0xFF000000) >> 24);
-    const u8 green = (u8)((color & 0x00FF0000) >> 16);
-    const u8 blue  = (u8)((color & 0x0000FF00) >> 8);
-    const u8 alpha = (u8)(color & 0x000000FF);
+    u8 red   = (u8)((color & 0xFF000000) >> 24);
+    u8 green = (u8)((color & 0x00FF0000) >> 16);
+    u8 blue  = (u8)((color & 0x0000FF00) >> 8);
+    u8 alpha = (u8)(color & 0x000000FF);
 
     return v4((f32)red / 255.f, (f32)green / 255.f, (f32)blue / 255.f, (f32)alpha / 255.f);
 }
@@ -129,7 +129,7 @@ typedef union Quaternion {
     struct { f32 _padding; Vector3 yzw; };
 } Quaternion;
 
-static const Quaternion quat_identity = { 0.f, 0.f, 0.f, 1.f };
+static Quaternion quat_identity = { 0.f, 0.f, 0.f, 1.f };
 
 Quaternion quat_from_axis_angle(Vector3 axis, f32 angle_rad);
 Quaternion quat_from_euler_angles(f32 roll, f32 pitch, f32 yaw);
@@ -138,7 +138,7 @@ inline f32 quat_len_sq(Quaternion a) { return a.x * a.x + a.y * a.y + a.z * a.z 
 inline f32 quat_len(Quaternion a) { return sqrtf(quat_len_sq(a)); }
 
 inline Quaternion quat_norm(Quaternion a) {
-    const f32 scale = 1.f / quat_len(a);
+    f32 scale = 1.f / quat_len(a);
     return (Quaternion) { a.x * scale, a.y * scale, a.z * scale, a.w * scale };
 }
 
@@ -169,9 +169,9 @@ typedef struct Rect {
 
 inline Rect rect_from_raw(f32 x0, f32 y0, f32 x1, f32 y1) { return (Rect) { v2(x0, y0), v2(x1, y1) }; }
 inline Rect rect_from_pos(Vector2 pos, Vector2 size) {
-    const Vector2 half_size = v2_div(size, v2s(2.f));
-    const Vector2 min = v2_sub(pos, half_size);
-    const Vector2 max = v2_add(pos, half_size);
+    Vector2 half_size = v2_div(size, v2s(2.f));
+    Vector2 min = v2_sub(pos, half_size);
+    Vector2 max = v2_add(pos, half_size);
     return (Rect) { min, max };
 }
 inline Vector2 rect_size(Rect a) { return v2_sub(a.max, a.min); }

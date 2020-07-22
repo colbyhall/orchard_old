@@ -29,25 +29,25 @@ typedef struct Asset {
 void init_asset_manager(Platform* platform);
 Asset* find_asset(String path);
 inline Shader* find_shader(String path) { 
-    Asset* const found = find_asset(path);
+    Asset* found = find_asset(path);
     if (found && found->type == AT_Shader) return &found->shader;
     return 0;
 }
 
 inline Texture2d* find_texture2d(String path) { 
-    Asset* const found = find_asset(path);
+    Asset* found = find_asset(path);
     if (found && found->type == AT_Texture2d) return &found->texture2d;
     return 0;
 }
 
 inline Font_Collection* find_font_collection(String path) { 
-    Asset* const found = find_asset(path);
+    Asset* found = find_asset(path);
     if (found && found->type == AT_Font_Collection) return &found->font_collection;
     return 0;
 }
 
 inline Mesh* find_mesh(String path) { 
-    Asset* const found = find_asset(path);
+    Asset* found = find_asset(path);
     if (found && found->type == AT_Mesh) return &found->mesh;
     return 0;
 }

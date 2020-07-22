@@ -144,7 +144,7 @@ inline b32 read_file_into_string(String path, String* string, Allocator allocato
 
     File_Metadata metadata;
     if (!g_platform->file_metadata(path, &metadata)) {
-        const b32 did_close = g_platform->close_file(&handle);
+        b32 did_close = g_platform->close_file(&handle);
         assert(did_close);
 
         return false;

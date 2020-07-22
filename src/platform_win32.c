@@ -39,13 +39,13 @@ typedef struct Game_Code_VTable {
     Shutdown_Game*  shutdown_game;
 } Game_Code_VTable;
 
-static const char* game_code_vtable_names[] = {
+static char* game_code_vtable_names[] = {
     "init_game",
     "tick_game",
     "shutdown_game",
 };
 
-static const char* dll_path = "bin/game_module.dll";
+static char* dll_path = "bin/game_module.dll";
 
 static void new_dll_path(char* buffer) {
     static int last = 0;
@@ -55,14 +55,14 @@ static void new_dll_path(char* buffer) {
 
 static b32 try_reload_dll(Game_Code* game_code) {
     File_Metadata metadata;
-    const b32 found_metadata = g_platform->file_metadata(from_cstr(dll_path), &metadata);
+    b32 found_metadata = g_platform->file_metadata(from_cstr(dll_path), &metadata);
     if (!found_metadata) {
         return false;
     }
 
     if (!game_code->library || game_code->last_write_time != metadata.last_write_time) {
         new_dll_path(game_code->dll_path);
-        const BOOL did_copy_file = CopyFileA(dll_path, game_code->dll_path, false);
+        BOOL did_copy_file = CopyFileA(dll_path, game_code->dll_path, false);
         if (!did_copy_file) return false;
 
         game_code->last_write_time = metadata.last_write_time;
@@ -83,9 +83,9 @@ static b32 try_reload_dll(Game_Code* game_code) {
 }
 
 static PLATFORM_OPEN_FILE(win32_open_file) {
-    const b32 read   = flags & FF_Read;
-    const b32 write  = flags & FF_Write;
-    const b32 create = flags & FF_Create;
+    b32 read   = flags & FF_Read;
+    b32 write  = flags & FF_Write;
+    b32 create = flags & FF_Create;
 
     assert(read || write);
 
@@ -97,8 +97,8 @@ static PLATFORM_OPEN_FILE(win32_open_file) {
     if (create) creation = OPEN_ALWAYS;
 
     // Try to create the file
-    void* const os_handle = CreateFileA((const char*)path.data, desired_access, FILE_SHARE_READ | FILE_SHARE_WRITE, 0, creation, FILE_ATTRIBUTE_NORMAL, 0);
-    const b32 is_open = os_handle != INVALID_HANDLE_VALUE;
+    void* os_handle = CreateFileA((char*)path.data, desired_access, FILE_SHARE_READ | FILE_SHARE_WRITE, 0, creation, FILE_ATTRIBUTE_NORMAL, 0);
+    b32 is_open = os_handle != INVALID_HANDLE_VALUE;
 
     // If we actually opened the file then fill out the handle data
     if (is_open) {
@@ -112,7 +112,7 @@ static PLATFORM_OPEN_FILE(win32_open_file) {
 static PLATFORM_CLOSE_FILE(win32_close_file) {
     if (!handle->os_handle) return false;
 
-    const b32 result = CloseHandle(handle->os_handle) == 1;
+    b32 result = CloseHandle(handle->os_handle) == 1;
     handle->os_handle = 0;
     return result;
 }
@@ -128,16 +128,16 @@ static PLATFORM_WRITE_FILE(win32_write_file) {
 
 static PLATFORM_FILE_METADATA(win32_file_metadata) {
     WIN32_FILE_ATTRIBUTE_DATA file_data;
-    if (GetFileAttributesExA((const char*)path.data, GetFileExInfoStandard, &file_data)) {
+    if (GetFileAttributesExA((char*)path.data, GetFileExInfoStandard, &file_data)) {
         if (!metadata) return true;
         
-        const FILETIME creation_time = file_data.ftCreationTime;
+        FILETIME creation_time = file_data.ftCreationTime;
         metadata->creation_time = (u64)creation_time.dwHighDateTime << 32 | creation_time.dwLowDateTime;
 
-        const FILETIME last_access_time = file_data.ftLastAccessTime;
+        FILETIME last_access_time = file_data.ftLastAccessTime;
         metadata->last_access_time = (u64)last_access_time.dwHighDateTime << 32 | last_access_time.dwLowDateTime;
 
-        const FILETIME last_write_time = file_data.ftLastWriteTime;
+        FILETIME last_write_time = file_data.ftLastWriteTime;
         metadata->last_write_time = (u64)last_write_time.dwHighDateTime << 32 | last_write_time.dwLowDateTime;
 
         metadata->size = (int)file_data.nFileSizeLow;
@@ -150,7 +150,7 @@ static PLATFORM_FILE_METADATA(win32_file_metadata) {
 
 static PLATFORM_FIND_ALL_FILES_IN_DIR(win32_find_all_files_in_dir) {
     // @Cleanup paths on windows can be any len now. 
-    const usize path_len = (usize)path.len;
+    usize path_len = (usize)path.len;
     char path_final[MAX_PATH];
     mem_copy(path_final, path.data, path_len);
     char* path_end = path_final + path_len;
@@ -170,26 +170,26 @@ static PLATFORM_FIND_ALL_FILES_IN_DIR(win32_find_all_files_in_dir) {
     Directory_Result* first = 0;
     Directory_Result* last = 0;
     do {
-        Directory_Result* const current = mem_alloc_struct(allocator, Directory_Result);
+        Directory_Result* current = mem_alloc_struct(allocator, Directory_Result);
         current->next = 0;
         if (last) last->next = current;
         last = current;
         if (!first) first = current;
 
-        File_Metadata* const metadata = &current->metadata;
+        File_Metadata* metadata = &current->metadata;
 
-        const FILETIME creation_time = find_data.ftCreationTime;
+        FILETIME creation_time = find_data.ftCreationTime;
         metadata->creation_time = (u64)creation_time.dwHighDateTime << 32 | creation_time.dwLowDateTime;
-        const FILETIME last_access_time = find_data.ftLastAccessTime;
+        FILETIME last_access_time = find_data.ftLastAccessTime;
         metadata->last_access_time = (u64)last_access_time.dwHighDateTime << 32 | last_access_time.dwLowDateTime;
-        const FILETIME last_write_time = find_data.ftLastWriteTime;
+        FILETIME last_write_time = find_data.ftLastWriteTime;
         metadata->last_write_time = (u64)last_write_time.dwHighDateTime << 32 | last_write_time.dwLowDateTime;
 
-        String* const built_path = &current->path;
-        const b32 ends_with_slash = path.data[path_len - 1] == '\\' || path.data[path_len - 1] == '/';
-        const usize built_path_allocation_size = path_len + str_len(find_data.cFileName) + ends_with_slash + 2;
+        String* built_path = &current->path;
+        b32 ends_with_slash = path.data[path_len - 1] == '\\' || path.data[path_len - 1] == '/';
+        usize built_path_allocation_size = path_len + str_len(find_data.cFileName) + ends_with_slash + 2;
         built_path->data = mem_alloc_array(allocator, u8, built_path_allocation_size);
-        built_path->len = sprintf((char*)built_path->data, ends_with_slash ? "%s%s" : "%s/%s", (const char*)path.data, find_data.cFileName);
+        built_path->len = sprintf((char*)built_path->data, ends_with_slash ? "%s%s" : "%s/%s", (char*)path.data, find_data.cFileName);
         built_path->data[built_path->len] = 0;
         built_path->allocator = allocator;
 
@@ -215,7 +215,7 @@ static PLATFORM_FIND_ALL_FILES_IN_DIR(win32_find_all_files_in_dir) {
 }
 
 static PLATFORM_CREATE_DIRECTORY(win32_create_directory) {
-    return CreateDirectoryA((const char*)path.data, 0);
+    return CreateDirectoryA((char*)path.data, 0);
 }
 
 static PLATFORM_LOCAL_TIME(win32_local_time) {
@@ -254,13 +254,13 @@ static LRESULT the_window_proc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam
         break;
     case WM_SYSKEYDOWN:
     case WM_KEYDOWN: {
-        const u8 key = (u8)wParam;
+        u8 key = (u8)wParam;
         g_platform->input.state.keys_down[key] = true;
         push_os_event(OET_Key_Pressed, .key = key);
     } break;
     case WM_SYSKEYUP:
     case WM_KEYUP: {
-        const u8 key = (u8)wParam;
+        u8 key = (u8)wParam;
         g_platform->input.state.keys_down[key] = false;
         push_os_event(OET_Key_Released, .key = key);
     } break;
@@ -298,8 +298,8 @@ static LRESULT the_window_proc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam
         g_platform->input.state.mouse_wheel_delta = GET_WHEEL_DELTA_WPARAM(wParam);
         break;
     case WM_MOUSEMOVE: {
-        const int mouse_x = GET_X_LPARAM(lParam);
-        const int mouse_y = g_platform->window_height - GET_Y_LPARAM(lParam);
+        int mouse_x = GET_X_LPARAM(lParam);
+        int mouse_y = g_platform->window_height - GET_Y_LPARAM(lParam);
         
         g_platform->input.state.mouse_x = mouse_x;
         g_platform->input.state.mouse_y = mouse_y;
@@ -311,8 +311,8 @@ static LRESULT the_window_proc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam
     case WM_SIZING:
         RECT viewport = { 0 };
         GetClientRect((HWND)g_platform->window_handle, &viewport);
-        const int old_width = g_platform->window_width;
-        const int old_height = g_platform->window_height;
+        int old_width = g_platform->window_width;
+        int old_height = g_platform->window_height;
         g_platform->window_width  = viewport.right - viewport.left;
         g_platform->window_height = viewport.bottom - viewport.top;
         push_os_event(OET_Window_Resized, .old_width = old_width, .old_height = old_height);
@@ -353,9 +353,9 @@ int main(int argv, char** argc) {
     // Move us to project base dir
     {
         char buffer[512];
-        const DWORD len = GetModuleFileNameA(0, buffer, 512);
+        DWORD len = GetModuleFileNameA(0, buffer, 512);
         for (u32 i = len - 1; i > 0; --i) {
-            const char c = buffer[i];
+            char c = buffer[i];
             if (c == '\\' || c == '/') {
                 buffer[i] = 0;
                 break;
@@ -406,7 +406,7 @@ int main(int argv, char** argc) {
     {
         HINSTANCE hInstance = GetModuleHandle(0); // @Temp
 
-        const WNDCLASSA window_class = {
+        WNDCLASSA window_class = {
             .lpfnWndProc    = the_window_proc,
             .hInstance      = hInstance,
             .hbrBackground  = (HBRUSH)(COLOR_WINDOW + 1),
@@ -417,20 +417,20 @@ int main(int argv, char** argc) {
         
         RegisterClassA(&window_class);
         
-        const int dpi_scaled_width  = (int)((f32)WINDOW_WIDTH * the_platform.dpi_scale);
-        const int dpi_scaled_height = (int)((f32)WINDOW_HEIGHT * the_platform.dpi_scale);
+        int dpi_scaled_width  = (int)((f32)WINDOW_WIDTH * the_platform.dpi_scale);
+        int dpi_scaled_height = (int)((f32)WINDOW_HEIGHT * the_platform.dpi_scale);
 
         RECT adjusted_rect = { 0, 0, dpi_scaled_width, dpi_scaled_height };
         AdjustWindowRect(&adjusted_rect, WS_OVERLAPPEDWINDOW, 0);
         
-        const int width = adjusted_rect.right - adjusted_rect.left;
-        const int height = adjusted_rect.bottom - adjusted_rect.top;
+        int width = adjusted_rect.right - adjusted_rect.left;
+        int height = adjusted_rect.bottom - adjusted_rect.top;
 
-        const int monitor_width = GetSystemMetrics(SM_CXSCREEN);
-        const int monitor_height = GetSystemMetrics(SM_CYSCREEN);
+        int monitor_width = GetSystemMetrics(SM_CXSCREEN);
+        int monitor_height = GetSystemMetrics(SM_CYSCREEN);
         
-        const int x = monitor_width / 2 - width / 2;
-        const int y = monitor_height / 2 - height / 2;
+        int x = monitor_width / 2 - width / 2;
+        int y = monitor_height / 2 - height / 2;
         
         HWND window_handle = CreateWindowA(
             window_class.lpszClassName,
@@ -458,7 +458,7 @@ int main(int argv, char** argc) {
         .function_count = array_count(game_code_vtable_names),
         .functions      = (void**)&game_code_vtable,
     };
-    const b32 loaded_game_code = try_reload_dll(&game_code);
+    b32 loaded_game_code = try_reload_dll(&game_code);
     assert(loaded_game_code);
 
     game_code_vtable.init_game(g_platform);
@@ -492,7 +492,7 @@ int main(int argv, char** argc) {
             DispatchMessage(&msg);
         }
 
-        const f32 dt  = (f32)(g_platform->current_frame_time - g_platform->last_frame_time);
+        f32 dt  = (f32)(g_platform->current_frame_time - g_platform->last_frame_time);
         game_code_vtable.tick_game(dt);
         reset_arena(the_platform.frame_arena);
 

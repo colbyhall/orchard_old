@@ -138,7 +138,7 @@ typedef s32 b32;
 #define ensure(cond) _assert_implementation(cond != 0, false, __LINE__, __FILE__)
 #define assert(cond) _assert_implementation(cond != 0, true, __LINE__, __FILE__)
 
-inline void _assert_implementation(b32 cond, b32 do_segfault, u32 line, const char* file) {
+inline void _assert_implementation(b32 cond, b32 do_segfault, u32 line, char* file) {
     if (cond) return;
 
     printf("%s thrown on %s at line %lu", do_segfault ? "assertion" : "ensure", file, line);
@@ -204,7 +204,7 @@ typedef struct Memory_Arena {
 Allocator arena_allocator_raw(void* base, usize size);
 Allocator arena_allocator(Allocator allocator, usize size);
 inline void reset_arena(Allocator allocator) {
-    Memory_Arena* const arena = allocator.data;
+    Memory_Arena* arena = allocator.data;
     arena->used = 0;
 }
 
@@ -214,12 +214,12 @@ typedef struct Temp_Memory {
 } Temp_Memory;
 
 inline Temp_Memory begin_temp_memory(Allocator allocator) {
-    Memory_Arena* const arena = allocator.data;
+    Memory_Arena* arena = allocator.data;
     return (Temp_Memory) { arena, arena->used, };
 }
 
 inline void end_temp_memory(Temp_Memory temp_mem) {
-    Memory_Arena* const arena = temp_mem.arena;
+    Memory_Arena* arena = temp_mem.arena;
     assert(arena);
     arena->used = temp_mem.used;
 }
@@ -290,9 +290,9 @@ b32 starts_with(String a, String b);
 #define FNV_OFFSET_BASIC 0xcbf29ce484222325
 #define FNV_PRIME 0x100000001b3
 
-inline u64 fnv1_hash(const void* s, usize size) {
+inline u64 fnv1_hash(void* s, usize size) {
     u64 hash = FNV_OFFSET_BASIC;
-    const u8* const casted_s = s;
+    u8* casted_s = s;
     for (usize i = 0; i < size; ++i) {
         hash *= FNV_PRIME;
         hash = hash ^ casted_s[i];

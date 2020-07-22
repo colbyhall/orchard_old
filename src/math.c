@@ -2,20 +2,20 @@
 
 Quaternion quat_from_axis_angle(Vector3 axis, f32 angle_rad) {
     angle_rad *= 0.5f;
-    const f32 s = sinf(angle_rad);
-    const f32 c = cosf(angle_rad);
+    f32 s = sinf(angle_rad);
+    f32 c = cosf(angle_rad);
     return (Quaternion) { s * axis.x, s * axis.y, s * axis.z, c };
 }
 
 Quaternion quat_from_euler_angles(f32 roll, f32 pitch, f32 yaw) {
-    const f32 cr = cosf(roll * 0.5f);
-    const f32 sr = sinf(roll * 0.5f);
+    f32 cr = cosf(roll * 0.5f);
+    f32 sr = sinf(roll * 0.5f);
 
-    const f32 cp = cosf(pitch * 0.5f);
-    const f32 sp = sinf(pitch * 0.5f);
+    f32 cp = cosf(pitch * 0.5f);
+    f32 sp = sinf(pitch * 0.5f);
 
-    const f32 cy = cosf(yaw * 0.5f);
-    const f32 sy = sinf(yaw * 0.5f);
+    f32 cy = cosf(yaw * 0.5f);
+    f32 sy = sinf(yaw * 0.5f);
 
     return (Quaternion) { 
         sr * cp * cy - cr * sp * sy,
@@ -26,7 +26,7 @@ Quaternion quat_from_euler_angles(f32 roll, f32 pitch, f32 yaw) {
 }   
 
 Vector3 rotate_vector_with_quat(Vector3 a, Quaternion b) {
-    const Vector3 t = v3_mul(v3_cross(b.xyz, a), v3s(2.f));
+    Vector3 t = v3_mul(v3_cross(b.xyz, a), v3s(2.f));
     return v3_add(v3_add(a, v3_mul(t, v3s(b.w))), v3_cross(b.xyz, t));
 }
 
@@ -54,11 +54,11 @@ Matrix4 m4_identity(void) {
 }
 
 Matrix4 m4_ortho(f32 size, f32 aspect_ratio, f32 far, f32 near) {
-    const f32 right = size * aspect_ratio;
-    const f32 left = -right;
+    f32 right = size * aspect_ratio;
+    f32 left = -right;
 
-    const f32 top = size;
-    const f32 bottom = -top;
+    f32 top = size;
+    f32 bottom = -top;
 
     Matrix4 result = m4_identity();
     result.e[0 + 0 * 4] = 2.f / (right - left);
@@ -75,7 +75,7 @@ Matrix4 m4_ortho(f32 size, f32 aspect_ratio, f32 far, f32 near) {
 Matrix4 m4_persp(f32 fov, f32 asepct_ratio, f32 far, f32 near) {
     Matrix4 result = m4_identity();
 
-    const f32 cotangent = 1.f / tanf(fov * (PI / 360.f));
+    f32 cotangent = 1.f / tanf(fov * (PI / 360.f));
     result.e[0 + 0 * 4] = cotangent / asepct_ratio;
     result.e[1 + 1 * 4] = cotangent;
     result.e[3 + 2 * 4] = -1.f;
@@ -99,17 +99,17 @@ Matrix4 m4_rotate(Quaternion rot) {
 
     rot = quat_norm(rot);
 
-    const f32 xx = rot.x * rot.x;
-    const f32 xy = rot.x * rot.y;
-    const f32 xz = rot.x * rot.z;
-    const f32 xw = rot.x * rot.w;
+    f32 xx = rot.x * rot.x;
+    f32 xy = rot.x * rot.y;
+    f32 xz = rot.x * rot.z;
+    f32 xw = rot.x * rot.w;
 
-    const f32 yy = rot.y * rot.y;
-    const f32 yz = rot.y * rot.z;
-    const f32 yw = rot.y * rot.w;
+    f32 yy = rot.y * rot.y;
+    f32 yz = rot.y * rot.z;
+    f32 yw = rot.y * rot.w;
 
-    const f32 zz = rot.z * rot.z;
-    const f32 zw = rot.z * rot.w;
+    f32 zz = rot.z * rot.z;
+    f32 zw = rot.z * rot.w;
 
     result.col_row[0][0] = 1.f - 2.f * (yy + zz);
     result.col_row[1][0] = 2.f * (xy - zw);
@@ -136,10 +136,10 @@ Matrix4 m4_scale(Vector3 scale) {
 
 b32 rect_overlaps_rect(Rect a, Rect b, Rect* overlap) {
     if (overlap) {
-        const f32 min_x = (a.min.x < b.min.x) ? b.min.x : a.min.x;
-        const f32 min_y = (a.min.y < b.min.y) ? b.min.y : a.min.y;
-        const f32 max_x = (a.max.x > b.max.x) ? b.max.x : a.max.x;
-        const f32 max_y = (a.max.y > b.max.y) ? b.max.y : a.max.y;
+        f32 min_x = (a.min.x < b.min.x) ? b.min.x : a.min.x;
+        f32 min_y = (a.min.y < b.min.y) ? b.min.y : a.min.y;
+        f32 max_x = (a.max.x > b.max.x) ? b.max.x : a.max.x;
+        f32 max_y = (a.max.y > b.max.y) ? b.max.y : a.max.y;
 
         overlap->min = v2(min_x, min_y);
         overlap->max = v2(max_x, max_y);
@@ -153,17 +153,17 @@ b32 rect_overlaps_point(Rect a, Vector2 b) {
 }
 
 b32 line_intersect_line(Vector2 a1, Vector2 a2, Vector2 b1, Vector2 b2, Vector2* intersection) {
-    const Vector2 a = v2_sub(a2, a1);
-    const Vector2 b = v2_sub(b2, b1);
+    Vector2 a = v2_sub(a2, a1);
+    Vector2 b = v2_sub(b2, b1);
 
-    const f32 ab_cross = v2_cross(a, b);
+    f32 ab_cross = v2_cross(a, b);
     if (ab_cross == 0.f) return false;
 
-    const Vector2 c = v2_sub(b1, a1);
-    const f32 t = v2_cross(c, b) / ab_cross;
+    Vector2 c = v2_sub(b1, a1);
+    f32 t = v2_cross(c, b) / ab_cross;
     if (t < 0.f || t > 1.f) return false;
 
-    const f32 u = v2_cross(c, a) / ab_cross;
+    f32 u = v2_cross(c, a) / ab_cross;
     if (u < 0.f || u > 1.f) return false;
 
     if (intersection) *intersection = v2_add(a1, v2_mul(a, v2s(t)));
@@ -172,46 +172,46 @@ b32 line_intersect_line(Vector2 a1, Vector2 a2, Vector2 b1, Vector2 b2, Vector2*
 }
 
 b32 line_intersect_rect(Vector2 a1, Vector2 a2, Rect b, Rect_Intersect_Result* result) {
-    const Vector2 a     = v2_sub(a2, a1);
-    const Vector2 dir   = v2_norm(a);
-    const f32 dot_up    = v2_dot(v2_up, dir);
-    const f32 dot_right = v2_dot(v2_right, dir);
+    Vector2 a     = v2_sub(a2, a1);
+    Vector2 dir   = v2_norm(a);
+    f32 dot_up    = v2_dot(v2_up, dir);
+    f32 dot_right = v2_dot(v2_right, dir);
 
     if (dot_right > 0.5f) {
-        const Vector2 b1 = b.min;
-        const Vector2 b2 = v2(b.min.x, b.max.y);
+        Vector2 b1 = b.min;
+        Vector2 b2 = v2(b.min.x, b.max.y);
         if (line_intersect_line(a1, a2, b1, b2, &result->intersection)) {
-            const Vector2 b_dir = v2_norm(v2_sub(b2, b1)); // We technically know this already
+            Vector2 b_dir = v2_norm(v2_sub(b2, b1)); // We technically know this already
             result->normal = v2_perp(b_dir);
             return true;
         }
     }
 
     if (dot_right < 0.5f) {
-        const Vector2 b1 = b.max;
-        const Vector2 b2 = v2(b.max.x, b.min.y);
+        Vector2 b1 = b.max;
+        Vector2 b2 = v2(b.max.x, b.min.y);
         if (line_intersect_line(a1, a2, b1, b2, &result->intersection)) {
-            const Vector2 b_dir = v2_norm(v2_sub(b2, b1)); // We technically know this already
+            Vector2 b_dir = v2_norm(v2_sub(b2, b1)); // We technically know this already
             result->normal = v2_perp(b_dir);
             return true;
         }
     }
 
     if (dot_up > 0.5f) {
-        const Vector2 b1 = b.min;
-        const Vector2 b2 = v2(b.max.x, b.min.y);
+        Vector2 b1 = b.min;
+        Vector2 b2 = v2(b.max.x, b.min.y);
         if (line_intersect_line(a1, a2, b1, b2, &result->intersection)) {
-            const Vector2 b_dir = v2_norm(v2_sub(b2, b1)); // We technically know this already
+            Vector2 b_dir = v2_norm(v2_sub(b2, b1)); // We technically know this already
             result->normal = v2_perp(b_dir);
             return true;
         }
     }
 
     if (dot_up < 0.5f) {
-        const Vector2 b1 = b.max;
-        const Vector2 b2 = v2(b.min.x, b.max.y);
+        Vector2 b1 = b.max;
+        Vector2 b2 = v2(b.min.x, b.max.y);
         if (line_intersect_line(a1, a2, b1, b2, &result->intersection)) {
-            const Vector2 b_dir = v2_norm(v2_sub(b2, b1)); // We technically know this already
+            Vector2 b_dir = v2_norm(v2_sub(b2, b1)); // We technically know this already
             result->normal = v2_perp(b_dir);
             return true;
         }
@@ -221,26 +221,26 @@ b32 line_intersect_rect(Vector2 a1, Vector2 a2, Rect b, Rect_Intersect_Result* r
 }
 
 b32 rect_sweep_rect(Vector2 a1, Vector2 a2, Vector2 size, Rect b, Rect_Intersect_Result* result) {
-    const Vector2 half_size = v2_div(size, v2s(2.f));
-    const Rect large_b = { v2_sub(b.min, half_size), v2_add(b.max, half_size) };
+    Vector2 half_size = v2_div(size, v2s(2.f));
+    Rect large_b = { v2_sub(b.min, half_size), v2_add(b.max, half_size) };
 
     if (line_intersect_rect(a1, a2, large_b, result)) return true;
 
-    const Vector2 b_pos = v2((b.max.x - b.min.x) + b.min.x, (b.max.y - b.min.y) + b.min.y);
+    Vector2 b_pos = v2((b.max.x - b.min.x) + b.min.x, (b.max.y - b.min.y) + b.min.y);
 
     Rect overlap;
-    const Rect at_end = rect_from_pos(a2, size);
+    Rect at_end = rect_from_pos(a2, size);
     if (rect_overlaps_rect(at_end, b, &overlap)) {
-        const Vector2 overlap_size = rect_size(overlap);
+        Vector2 overlap_size = rect_size(overlap);
         Vector2 intersection = a2;
         Vector2 normal = v2z();
 
         if (overlap_size.x > overlap_size.y) {
-            const f32 flip = SIGN(a2.y - b_pos.y);
+            f32 flip = SIGN(a2.y - b_pos.y);
             intersection.y += overlap_size.y * flip;
             normal.y = flip;
         } else {
-            const f32 flip = SIGN(a2.x - b_pos.x);
+            f32 flip = SIGN(a2.x - b_pos.x);
             intersection.x += overlap_size.x * flip;
             normal.x = flip;
         }
@@ -260,19 +260,19 @@ void iterate_seed(Random_Seed* seed) {
 f32 random_f32(Random_Seed* seed) {
     iterate_seed(seed);
 
-    const f32 tmp = 1.f;
+    f32 tmp = 1.f;
     f32 result;
     *(int*)&result = (*(int*)&tmp & 0xFF800000) | (seed->seed & 0x007FFFFF);
     return result - (int)result;
 }
 
 f32 random_f32_in_range(Random_Seed* seed, f32 min, f32 max) {
-    const f32 dist = max - min;
+    f32 dist = max - min;
     return random_f32(seed) * dist + min;
 }
 
 // Found this here https://gist.github.com/nowl/828013
-static const u8 perline_hash[] = {
+static u8 perline_hash[] = {
     208, 34, 231, 213, 32, 248, 233, 56, 161, 78, 24, 140, 71, 48, 140, 254, 245, 255, 247, 247, 40, 
     185, 248, 251, 245, 28, 124, 204, 204, 76, 36, 1, 107, 28, 234, 163, 202, 224, 245, 128, 167, 204, 
     9, 92, 217, 54, 239, 174, 173, 102, 193, 189, 190, 121, 100, 108, 167, 44, 43, 77, 180, 204, 8, 81, 
@@ -294,7 +294,7 @@ static int noise2(Random_Seed seed, int x, int y) {
     int xindex = (perline_hash[yindex] + x) % 256;
     if (xindex < 0) xindex += 256;
 
-    const int result = perline_hash[xindex];
+    int result = perline_hash[xindex];
     return result;
 }
 
@@ -303,20 +303,20 @@ static f32 perlin_lerpf(f32 a, f32 b, f32 t) {
 }
 
 static f32 noise_2d(Random_Seed seed, f32 x, f32 y) {
-    const int x_int = (int)floorf(x);
-    const int y_int = (int)floorf(y);
+    int x_int = (int)floorf(x);
+    int y_int = (int)floorf(y);
 
-    const f32 x_frac = x - x_int;
-    const f32 y_frac = y - y_int;
+    f32 x_frac = x - x_int;
+    f32 y_frac = y - y_int;
 
-    const int s = noise2(seed, x_int, y_int);
-    const int t = noise2(seed, x_int + 1, y_int);
+    int s = noise2(seed, x_int, y_int);
+    int t = noise2(seed, x_int + 1, y_int);
 
-    const int u = noise2(seed, x_int, y_int + 1);
-    const int v = noise2(seed, x_int + 1, y_int + 1);
+    int u = noise2(seed, x_int, y_int + 1);
+    int v = noise2(seed, x_int + 1, y_int + 1);
 
-    const f32 low  = perlin_lerpf((f32)s, (f32)t, x_frac);
-    const f32 high = perlin_lerpf((f32)u, (f32)v, x_frac);
+    f32 low  = perlin_lerpf((f32)s, (f32)t, x_frac);
+    f32 high = perlin_lerpf((f32)u, (f32)v, x_frac);
 
     return perlin_lerpf(low, high, y_frac);
 }

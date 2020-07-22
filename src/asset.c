@@ -10,7 +10,7 @@ enum Asset_Flags {
     AF_Initialized = (1 << 0),
 };
 
-static const char* asset_type_string[] = {
+static char* asset_type_string[] = {
     "None",
     "Shader",
     "Texture2d",
@@ -28,14 +28,14 @@ static b32 load_null(Asset* asset, String file, Allocator asset_memory) { return
 static b32 unload_null(Asset* asset, Allocator asset_memory) { return false; }
 
 static b32 load_shader(Asset* asset, String file, Allocator asset_memory) {
-    Shader* const shader = &asset->shader;
+    Shader* shader = &asset->shader;
 
     shader->source = copy_string(file, asset_memory);
     return init_shader(shader);
 }
 
 static b32 load_texture2d(Asset* asset, String file, Allocator asset_memory) {
-    Texture2d* const texture = &asset->texture2d;
+    Texture2d* texture = &asset->texture2d;
 
     stbi_set_flip_vertically_on_load(true);
 
@@ -50,17 +50,17 @@ static b32 load_texture2d(Asset* asset, String file, Allocator asset_memory) {
 }
 
 static b32 load_font_collection(Asset* asset, String file, Allocator asset_memory) {
-    Font_Collection* const fc = &asset->font_collection;
+    Font_Collection* fc = &asset->font_collection;
     return init_font_collection(expand_string(file), asset_memory, fc);
 }
 
 static u64 hash_mesh_vertex(void* a, void* b, int size) {
     assert(sizeof(Mesh_Vertex) == size);
 
-    const Mesh_Vertex* const a_vert = a;
+    Mesh_Vertex* a_vert = a;
 
     if (b) {
-        const Mesh_Vertex* const b_vert = b;
+        Mesh_Vertex* b_vert = b;
         return v3_equal(a_vert->position, b_vert->position) && v3_equal(a_vert->normal, b_vert->normal) && v2_equal(a_vert->uv, b_vert->uv);
     }
 
@@ -68,16 +68,16 @@ static u64 hash_mesh_vertex(void* a, void* b, int size) {
 }
 
 static b32 load_mesh(Asset* asset, String file, Allocator asset_memory) {
-    Mesh* const mesh = &asset->mesh;
-    fastObjMesh* const fast_obj_mesh = fast_obj_read((const char*)asset->path.data);
+    Mesh* mesh = &asset->mesh;
+    fastObjMesh* fast_obj_mesh = fast_obj_read((char*)asset->path.data);
     if (!fast_obj_mesh) return false;
 
     int index_cap = 0;
     for (int i = 0; i < (int)fast_obj_mesh->group_count; ++i) {
-        const fastObjGroup* const group = fast_obj_mesh->groups + i;
+        fastObjGroup* group = fast_obj_mesh->groups + i;
 
         for (int j = 0; j < (int)group->face_count; ++j) {
-            const int vertex_count = fast_obj_mesh->face_vertices[group->face_offset + j];
+            int vertex_count = fast_obj_mesh->face_vertices[group->face_offset + j];
 
             if (vertex_count == 3) index_cap += 3;
             else if (vertex_count == 4) index_cap += 6;
@@ -92,28 +92,28 @@ static b32 load_mesh(Asset* asset, String file, Allocator asset_memory) {
     reserve_hash_table(&vertex_index_table, index_cap / 3);
 
     for (int i = 0; i < (int)fast_obj_mesh->group_count; ++i) {
-        const fastObjGroup* const group = fast_obj_mesh->groups + i;
+        fastObjGroup* group = fast_obj_mesh->groups + i;
 
         int index_offset = group->index_offset;
         for (int j = 0; j < (int)group->face_count; ++j) {
-            const int vertex_count = fast_obj_mesh->face_vertices[group->face_offset + j];
+            int vertex_count = fast_obj_mesh->face_vertices[group->face_offset + j];
 
             int found_indices[4];
 
             for (int k = 0; k < vertex_count; ++k) {
-                const fastObjIndex* const index = fast_obj_mesh->indices + index_offset + k;
+                fastObjIndex* index = fast_obj_mesh->indices + index_offset + k;
                 
-                const float* const p = fast_obj_mesh->positions + index->p * 3;
-                const Vector3 position = v3(-p[2], p[0], p[1]);
+                float* p = fast_obj_mesh->positions + index->p * 3;
+                Vector3 position = v3(-p[2], p[0], p[1]);
 
-                const float* const n = fast_obj_mesh->normals + index->n * 3;
-                const Vector3 normal = v3(-n[2], n[0], n[1]);
+                float* n = fast_obj_mesh->normals + index->n * 3;
+                Vector3 normal = v3(-n[2], n[0], n[1]);
 
-                const float* const u = fast_obj_mesh->texcoords + index->t * 2;
-                const Vector2 uv = v2(u[0], u[1]);
+                float* u = fast_obj_mesh->texcoords + index->t * 2;
+                Vector2 uv = v2(u[0], u[1]);
 
                 Mesh_Vertex vertex = { position, normal, uv };
-                int* const found_indice = push_hash_table(&vertex_index_table, vertex, vertex_index_table.pair_count);
+                int* found_indice = push_hash_table(&vertex_index_table, vertex, vertex_index_table.pair_count);
                 if (found_indice) found_indices[k] = *found_indice;
                 else found_indices[k] = vertex_index_table.pair_count - 1;
             }
@@ -167,7 +167,7 @@ typedef struct Asset_Type_Extension {
     const char* ext;
 } Asset_Type_Extension;
 
-static const Asset_Type_Extension asset_type_extensions[] = {
+static Asset_Type_Extension asset_type_extensions[] = {
     { AT_Shader,    "glsl" },
     { AT_Texture2d, "png" },
     { AT_Texture2d, "jpg" },
@@ -178,12 +178,12 @@ static const Asset_Type_Extension asset_type_extensions[] = {
 };
 
 static Asset_Type get_asset_type_from_path(String path) {
-    const int period_index = find_from_left(path, '.');
+    int period_index = find_from_left(path, '.');
     assert(period_index != -1);
     String ext = advance_string(path, period_index + 1);
     
     for (int i = 0; i < array_count(asset_type_extensions); ++i) {
-        const Asset_Type_Extension ate = asset_type_extensions[i]; // Nom nom nom
+        Asset_Type_Extension ate = asset_type_extensions[i]; // Nom nom nom
         if (string_equal(ext, from_cstr(ate.ext))) return ate.type;
     }
 
@@ -202,12 +202,12 @@ void init_asset_manager(Platform* platform) {
         Temp_Memory temp_memory = begin_temp_memory(platform->frame_arena);
         if (iter->type != DET_File) continue;
 
-        const f64 start_time = g_platform->time_in_seconds();
+        f64 start_time = g_platform->time_in_seconds();
 
-        const Asset_Type type = get_asset_type_from_path(iter->path);
+        Asset_Type type = get_asset_type_from_path(iter->path);
         if (!type) continue;
 
-        Asset* const asset = &asset_manager->assets[asset_manager->asset_count++];
+        Asset* asset = &asset_manager->assets[asset_manager->asset_count++];
         asset->path = copy_string(iter->path, asset_manager->path_memory);
         asset->type = type;
         
@@ -226,7 +226,7 @@ void init_asset_manager(Platform* platform) {
                 o_log_error("[Asset] %s failed to initialize from path %s", asset_type_string[type], (const char*)iter->path.data); \
                 continue; \
             } else { \
-                const f64 duration = g_platform->time_in_seconds() - start_time; \
+                f64 duration = g_platform->time_in_seconds() - start_time; \
                 o_log("[Asset] took %ims to load %s from path %s", (int)(duration * 1000.0), asset_type_string[type], (const char*)iter->path.data); \
             } \
             break;
@@ -245,7 +245,7 @@ void init_asset_manager(Platform* platform) {
 Asset* find_asset(String path) {
     // @SPEED @SPEED @SPEED @SPEED @SPEED @SPEED
     for (int i = 0; i < asset_manager->asset_count; ++i) {
-        Asset* const asset = &asset_manager->assets[i];
+        Asset* asset = &asset_manager->assets[i];
         if (starts_with(asset->path, path)) return asset;
     }
 

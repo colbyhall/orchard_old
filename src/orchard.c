@@ -39,12 +39,12 @@ Hash_Table _make_hash_table(int key_size, int value_size, Hash_Table_Func* func,
 
 static void rebuild_hash_table(Hash_Table* ht) {
     for (int i = 0; i < ht->pair_count; ++i) {
-        Hash_Bucket* const bucket = ht->buckets + i;
+        Hash_Bucket* bucket = ht->buckets + i;
         bucket->hash = ht->func((u8*)ht->keys + ht->key_size * i, 0, ht->key_size);
         bucket->index = i;
         bucket->next = 0;
 
-        const int index = bucket->hash % ht->pair_cap;
+        int index = bucket->hash % ht->pair_cap;
         Hash_Bucket** last = 0;
         Hash_Bucket** slot = ht->bucket_layout + index;
         while (*slot) {
@@ -74,12 +74,12 @@ void* _push_hash_table(Hash_Table* ht, void* key, int key_size, void* value, int
     mem_copy((u8*)ht->keys + key_size * ht->pair_count, key, key_size);
     mem_copy((u8*)ht->values + value_size * ht->pair_count, value, value_size);
 
-    Hash_Bucket* const bucket = ht->buckets + ht->pair_count;
+    Hash_Bucket* bucket = ht->buckets + ht->pair_count;
     bucket->hash = ht->func((u8*)ht->keys + key_size * ht->pair_count, 0, key_size);
     bucket->index = ht->pair_count;
     bucket->next = 0;
 
-    const int index = bucket->hash % ht->pair_cap;
+    int index = bucket->hash % ht->pair_cap;
     Hash_Bucket** last = 0;
     Hash_Bucket** slot = ht->bucket_layout + index;
     while (*slot) {
@@ -110,12 +110,12 @@ void* _find_hash_table(Hash_Table* ht, void* key, int key_size) {
 
     if (!ht->pair_count) return 0;
 
-    const u64 hash = ht->func(key, 0, key_size);
-    const int index = hash % ht->pair_cap;
+    u64 hash = ht->func(key, 0, key_size);
+    int index = hash % ht->pair_cap;
 
     Hash_Bucket* found = ht->bucket_layout[index];
     while (found) {
-        const u64 my_hash = found->hash;
+        u64 my_hash = found->hash;
         if (my_hash == hash) { // @TEMP } && ht->func(key, (u8*)ht->keys + found->index * key_size, key_size)) {
             return (u8*)ht->values + ht->value_size * found->index;
         }
@@ -128,8 +128,8 @@ void* _find_hash_table(Hash_Table* ht, void* key, int key_size) {
 u64 hash_string(void* a, void* b, int size) {
     assert(size == sizeof(String));
 
-    String* const s_a = a;
-    String* const s_b = b;
+    String* s_a = a;
+    String* s_b = b;
 
     if (b) return string_equal(*s_a, *s_b);
 
@@ -220,7 +220,7 @@ typedef struct Entity_Iterator {
 
 static Entity_Iterator make_entity_iterator(Entity_Manager* manager) {
     for (int i = 0; i < ENTITY_CAP; ++i) {
-        Entity* const e = manager->entities[i];
+        Entity* e = manager->entities[i];
 
         if (!e) continue;
 
@@ -243,7 +243,7 @@ static void step_entity_iterator(Entity_Iterator* iter) {
     if (iter->found_entity_count == iter->manager->entity_count) return;
 
     for (int i = iter->index + 1; i < ENTITY_CAP; ++i) {
-        Entity* const e = iter->manager->entities[i];
+        Entity* e = iter->manager->entities[i];
 
         if (!e) continue;
 
@@ -260,7 +260,7 @@ static Entity* entity_from_iterator(Entity_Iterator iter) {
 
 static void* find_entity(Entity_Manager* em, Entity_Id id) {
     for (entity_iterator(em)) {
-        Entity* const entity = entity_from_iterator(iter);
+        Entity* entity = entity_from_iterator(iter);
 
         if (entity->id == id) return entity->derived;
     }
@@ -269,16 +269,16 @@ static void* find_entity(Entity_Manager* em, Entity_Id id) {
 }
 
 static Tile* find_tile_at(Entity_Manager* em, int x, int y, int z) {
-    const int chunk_x = x / CHUNK_SIZE;
-    const int chunk_y = y / CHUNK_SIZE;
+    int chunk_x = x / CHUNK_SIZE;
+    int chunk_y = y / CHUNK_SIZE;
 
     if (x < 0 ||  y < 0) return 0;
 
     for (int i = 0; i < em->chunk_count; ++i) {
         Chunk chunk = em->chunks[i];
         if (chunk.x == chunk_x && chunk.y == chunk_y && chunk.z == z) {
-            const int local_x = x - chunk_x * CHUNK_SIZE;
-            const int local_y = y - chunk_y * CHUNK_SIZE;
+            int local_x = x - chunk_x * CHUNK_SIZE;
+            int local_y = y - chunk_y * CHUNK_SIZE;
             assert(local_x <= CHUNK_SIZE && local_y <= CHUNK_SIZE);
             return &chunk.tiles[local_x + local_y * CHUNK_SIZE];
         }
@@ -288,13 +288,13 @@ static Tile* find_tile_at(Entity_Manager* em, int x, int y, int z) {
 }
 
 static Entity_Manager* make_entity_manager(Allocator allocator) {
-    Entity_Manager* const result = mem_alloc_struct(allocator, Entity_Manager);
+    Entity_Manager* result = mem_alloc_struct(allocator, Entity_Manager);
 
     result->tile_memory = allocator;
     result->chunk_count = CHUNK_CAP;
 
     for (int i = 0; i < result->chunk_count; ++i) {
-        Chunk* const chunk = &result->chunks[i];
+        Chunk* chunk = &result->chunks[i];
 
         chunk->tiles = mem_alloc_array(allocator, Tile, CHUNK_SIZE * CHUNK_SIZE);
     }
@@ -316,7 +316,7 @@ static void* _make_entity(Entity_Manager* em, int size, Entity_Type type) {
     result->type = type;
 
     for (int i = 0; i < ENTITY_CAP; ++i) {
-        Entity** const entity = &em->entities[i];
+        Entity** entity = &em->entities[i];
         if (!(*entity)) {
             *entity = result;
             em->entity_count++;
@@ -335,9 +335,9 @@ typedef struct Camera {
 } Camera;
 
 static Vector2 get_mouse_pos_in_world_space(Camera* camera) {
-    const f32 ratio = (camera->current_ortho_size * 2.f) / (f32)g_platform->window_height;
-    const int adjusted_x = g_platform->input.state.mouse_x - g_platform->window_width / 2;
-    const int adjusted_y = g_platform->input.state.mouse_y - g_platform->window_height / 2;
+    f32 ratio = (camera->current_ortho_size * 2.f) / (f32)g_platform->window_height;
+    int adjusted_x = g_platform->input.state.mouse_x - g_platform->window_width / 2;
+    int adjusted_y = g_platform->input.state.mouse_y - g_platform->window_height / 2;
     return v2_add(v2_mul(v2((f32)adjusted_x, (f32)adjusted_y), v2s(ratio)), camera->location);
 }
 
@@ -352,35 +352,35 @@ static void set_camera(Entity_Manager* em, Camera* camera) {
 static Rect get_viewport_in_world_space(Camera* camera) {
     if (!camera) return rect_from_raw(0.f, 0.f, 0.f, 0.f);
     
-    const f32 ratio = (camera->current_ortho_size * 2.f) / (f32)g_platform->window_height;
-    const f32 adjusted_width = (f32)g_platform->window_width * ratio;
-    const f32 adjusted_height = (f32)g_platform->window_height * ratio;
+    f32 ratio = (camera->current_ortho_size * 2.f) / (f32)g_platform->window_height;
+    f32 adjusted_width = (f32)g_platform->window_width * ratio;
+    f32 adjusted_height = (f32)g_platform->window_height * ratio;
 
     return rect_from_pos(camera->location, v2(adjusted_width, adjusted_height));
 }
 
 static void tick_camera(Entity_Manager* em, Entity* entity, f32 dt) {
     assert(entity->type == ET_Camera);
-    Camera* const camera = entity->derived;
+    Camera* camera = entity->derived;
 
-    const f32 mouse_wheel_delta = (f32)g_platform->input.state.mouse_wheel_delta / 50.f;
+    f32 mouse_wheel_delta = (f32)g_platform->input.state.mouse_wheel_delta / 50.f;
     camera->target_ortho_size -= mouse_wheel_delta;
     camera->target_ortho_size = CLAMP(camera->target_ortho_size, 5.f, 50.f);
 
-    const Vector2 old_mouse_pos_in_world = get_mouse_pos_in_world_space(camera);
+    Vector2 old_mouse_pos_in_world = get_mouse_pos_in_world_space(camera);
 
-    const f32 old_ortho_size = camera->current_ortho_size;
+    f32 old_ortho_size = camera->current_ortho_size;
     camera->current_ortho_size = lerpf(camera->current_ortho_size, camera->target_ortho_size, dt * 5.f);
-    const f32 delta_ortho_size = camera->current_ortho_size - old_ortho_size;
+    f32 delta_ortho_size = camera->current_ortho_size - old_ortho_size;
 
-    const Vector2 delta_mouse_pos_in_world = v2_sub(old_mouse_pos_in_world, get_mouse_pos_in_world_space(camera));
+    Vector2 delta_mouse_pos_in_world = v2_sub(old_mouse_pos_in_world, get_mouse_pos_in_world_space(camera));
     if (delta_ortho_size != 0.f) camera->location = v2_add(camera->location, delta_mouse_pos_in_world);
 
-    const f32 ratio = (camera->current_ortho_size * 2.f) / (f32)g_platform->window_height;
+    f32 ratio = (camera->current_ortho_size * 2.f) / (f32)g_platform->window_height;
 
     if (g_platform->input.state.mouse_buttons_down[MOUSE_MIDDLE]) {
-        const Vector2 mouse_delta = v2((f32)g_platform->input.state.mouse_dx, (f32)g_platform->input.state.mouse_dy);
-        const f32 speed = ratio;
+        Vector2 mouse_delta = v2((f32)g_platform->input.state.mouse_dx, (f32)g_platform->input.state.mouse_dy);
+        f32 speed = ratio;
 
         camera->location = v2_add(camera->location, v2_mul(v2_inverse(mouse_delta), v2s(speed)));
     }
@@ -395,29 +395,29 @@ typedef struct Pawn {
 static void tick_pawn(Entity_Manager* em, Entity* entity, f32 dt) {
     assert(entity->type == ET_Pawn);
 
-    const f32 max_speed = 3.f;
-    Pawn* const pawn = entity->derived;
+    f32 max_speed = 3.f;
+    Pawn* pawn = entity->derived;
 
     Random_Seed seed = init_seed((int)g_platform->time_in_seconds());
 
-    const Vector2 to_point = v2_sub(pawn->target_location, pawn->location);
-    const f32 to_point_len = v2_len(to_point);
+    Vector2 to_point = v2_sub(pawn->target_location, pawn->location);
+    f32 to_point_len = v2_len(to_point);
     if (to_point_len < 0.1f) {
         pawn->idle_time += dt;
         if (pawn->idle_time >= 3.f) {
             pawn->idle_time = 0.f;
 
-            const int chunk_cap_sq = (int)sqrt(CHUNK_CAP);
-            const f32 max = (f32)(chunk_cap_sq * CHUNK_SIZE);
+            int chunk_cap_sq = (int)sqrt(CHUNK_CAP);
+            f32 max = (f32)(chunk_cap_sq * CHUNK_SIZE);
 
-            const f32 x = random_f32_in_range(&seed, 0.f, max);
-            const f32 y = random_f32_in_range(&seed, 0.f, max);
+            f32 x = random_f32_in_range(&seed, 0.f, max);
+            f32 y = random_f32_in_range(&seed, 0.f, max);
             pawn->target_location = v2(x, y);
 
             o_log("Pawn with id %lu will be moving toward (%f, %f)", pawn->id, pawn->target_location.x, pawn->target_location.y);
         }
     } else {
-        const Vector2 to_point_norm = v2_div(to_point, v2s(to_point_len));
+        Vector2 to_point_norm = v2_div(to_point, v2s(to_point_len));
         pawn->location = v2_add(pawn->location, v2_mul(to_point_norm, v2s(max_speed * dt)));
     }
 }
@@ -425,10 +425,10 @@ static void tick_pawn(Entity_Manager* em, Entity* entity, f32 dt) {
 static void draw_pawn(Entity_Manager* em, Entity* entity) {
     set_shader(find_shader(from_cstr("assets/shaders/basic2d")));
 
-    Camera* const camera = find_entity(em, em->camera_id);
+    Camera* camera = find_entity(em, em->camera_id);
 
-    const Rect viewport_in_world_space = get_viewport_in_world_space(camera);
-    const Rect draw_rect = move_rect(entity->bounds, entity->location);
+    Rect viewport_in_world_space = get_viewport_in_world_space(camera);
+    Rect draw_rect = move_rect(entity->bounds, entity->location);
 
     if (!rect_overlaps_rect(draw_rect, viewport_in_world_space, 0)) return;
 
@@ -442,7 +442,7 @@ entry(ET_Camera, tick_camera, draw_null) \
 entry(ET_Pawn, tick_pawn, draw_pawn) 
 
 static Pawn* make_pawn(Entity_Manager* em, Vector2 location, Vector2 target_location) {
-    Pawn* const result = make_entity(em, Pawn);
+    Pawn* result = make_entity(em, Pawn);
     result->bounds   = (Rect) { v2(-0.5f, 0.f), v2(0.5f, 2.f) };
     result->location = location;
     result->target_location = target_location;
@@ -450,7 +450,7 @@ static Pawn* make_pawn(Entity_Manager* em, Vector2 location, Vector2 target_loca
 }
 
 static Camera* make_camera(Entity_Manager* em, Vector2 location, f32 ortho_size) {
-    Camera* const result = make_entity(em, Camera);
+    Camera* result = make_entity(em, Camera);
     result->location = location;
     result->current_ortho_size = ortho_size;
     result->target_ortho_size  = ortho_size;
@@ -463,21 +463,21 @@ static void draw_null(Entity_Manager* em, Entity* entity) { }
 static void regen_map(Entity_Manager* em, Random_Seed seed) {
     o_log("[Game] Generating map with seed %llu", seed.seed);
 
-    const int chunk_cap_sq = (int)sqrt(CHUNK_CAP);
+    int chunk_cap_sq = (int)sqrt(CHUNK_CAP);
     for (int x = 0; x < chunk_cap_sq; ++x) {
         for (int y = 0; y < chunk_cap_sq; ++y) {
-            Chunk* const chunk = &em->chunks[x + y * chunk_cap_sq];
+            Chunk* chunk = &em->chunks[x + y * chunk_cap_sq];
             chunk->x = x;
             chunk->y = y;
             chunk->z = 0;
 
             for (int jx = 0; jx < CHUNK_SIZE; ++jx) {
                 for (int jy = 0; jy < CHUNK_SIZE; ++jy) {
-                    Tile* const tile = &chunk->tiles[jx + jy * CHUNK_SIZE];
+                    Tile* tile = &chunk->tiles[jx + jy * CHUNK_SIZE];
 
-                    const f32 final_x = (f32)(x * CHUNK_SIZE) + (f32)jx;
-                    const f32 final_y = (f32)(y * CHUNK_SIZE) + (f32)jy;
-                    const f32 noise   = perlin_get_2d(seed, final_x, final_y, 0.1f, 4);
+                    f32 final_x = (f32)(x * CHUNK_SIZE) + (f32)jx;
+                    f32 final_y = (f32)(y * CHUNK_SIZE) + (f32)jy;
+                    f32 noise   = perlin_get_2d(seed, final_x, final_y, 0.1f, 4);
 
                     tile->type = (noise > 0.65f) + 1;
                 }
@@ -485,17 +485,17 @@ static void regen_map(Entity_Manager* em, Random_Seed seed) {
         }
     }
 
-    Camera* const camera = make_camera(em, v2z(), 5.f);
+    Camera* camera = make_camera(em, v2z(), 5.f);
     set_camera(em, camera);
 
     for (int i = 0; i < 64; ++i) {
-        const f32 max = (f32)(chunk_cap_sq * CHUNK_SIZE);
+        f32 max = (f32)(chunk_cap_sq * CHUNK_SIZE);
 
-        const f32 start_x = random_f32_in_range(&seed, 0.f, max);
-        const f32 start_y = random_f32_in_range(&seed, 0.f, max);
+        f32 start_x = random_f32_in_range(&seed, 0.f, max);
+        f32 start_y = random_f32_in_range(&seed, 0.f, max);
 
-        const f32 target_x = random_f32_in_range(&seed, 0.f, max);
-        const f32 target_y = random_f32_in_range(&seed, 0.f, max);
+        f32 target_x = random_f32_in_range(&seed, 0.f, max);
+        f32 target_y = random_f32_in_range(&seed, 0.f, max);
 
         o_log("Pawn %i is starting at (%f, %f) and will be moving toward (%f, %f)", i + 1, start_x, start_y, target_x, target_y);
         make_pawn(em, v2(start_x, start_y), v2(target_x, target_y));
@@ -534,7 +534,7 @@ DLL_EXPORT void init_game(Platform* platform) {
 DLL_EXPORT void tick_game(f32 dt) {
     // Do input handling
     for (int i = 0; i < g_platform->num_events; ++i) {
-        const OS_Event event = g_platform->events[i];
+        OS_Event event = g_platform->events[i];
 
         switch (event.type) {
         case OET_Window_Resized:
@@ -543,12 +543,12 @@ DLL_EXPORT void tick_game(f32 dt) {
         }
     }
 
-    Entity_Manager* const em = game_state->entity_manager;
+    Entity_Manager* em = game_state->entity_manager;
 
     // Tick the game state
     {
         for (entity_iterator(em)) {
-            Entity* const entity = entity_from_iterator(iter);
+            Entity* entity = entity_from_iterator(iter);
 
             switch (entity->type) {
 #define TICK_ENTITIES(type, tick, draw) \
@@ -560,45 +560,45 @@ DLL_EXPORT void tick_game(f32 dt) {
     }
 
     // Draw the game state
-    const f64 before_draw = g_platform->time_in_seconds();
+    f64 before_draw = g_platform->time_in_seconds();
     {
         glViewport(0, 0, g_platform->window_width, g_platform->window_height);
         clear_framebuffer(v3s(0.01f));
 
         draw_state->num_draw_calls = 0;
 
-        Camera* const camera = find_entity(em, em->camera_id);
+        Camera* camera = find_entity(em, em->camera_id);
         if (camera) {
             // Draw the tilemap
             set_shader(find_shader(from_cstr("assets/shaders/basic2d")));
             set_uniform_texture("diffuse", *find_texture2d(from_cstr("assets/sprites/terrain_map")));
             draw_from(camera->location, camera->current_ortho_size);
 
-            const Rect viewport_in_world_space = get_viewport_in_world_space(camera);
+            Rect viewport_in_world_space = get_viewport_in_world_space(camera);
             
             imm_begin();
             for (int i = 0; i < em->chunk_count; ++i) {
-                Chunk* const chunk = &em->chunks[i];
+                Chunk* chunk = &em->chunks[i];
                 
-                const Vector2 min = v2((f32)chunk->x * CHUNK_SIZE, (f32)chunk->y * CHUNK_SIZE);
-                const Vector2 max = v2_add(min, v2(CHUNK_SIZE, CHUNK_SIZE));
-                const Rect chunk_rect = { min, max };
+                Vector2 min = v2((f32)chunk->x * CHUNK_SIZE, (f32)chunk->y * CHUNK_SIZE);
+                Vector2 max = v2_add(min, v2(CHUNK_SIZE, CHUNK_SIZE));
+                Rect chunk_rect = { min, max };
 
                 if (!rect_overlaps_rect(viewport_in_world_space, chunk_rect, 0)) continue;
 
-                const Vector2 pos = v2((f32)(chunk->x * CHUNK_SIZE), (f32)(chunk->y * CHUNK_SIZE));
+                Vector2 pos = v2((f32)(chunk->x * CHUNK_SIZE), (f32)(chunk->y * CHUNK_SIZE));
                 for (int x = 0; x < CHUNK_SIZE; ++x) {
                     for (int y = 0; y < CHUNK_SIZE; ++y) {
-                        Tile* const tile = &chunk->tiles[x + y * CHUNK_SIZE];
+                        Tile* tile = &chunk->tiles[x + y * CHUNK_SIZE];
 
-                        const Vector2 tmin = v2_add(pos, v2((f32)x, (f32)y));
-                        const Vector2 tmax = v2_add(tmin, v2s(1.f));
+                        Vector2 tmin = v2_add(pos, v2((f32)x, (f32)y));
+                        Vector2 tmax = v2_add(tmin, v2s(1.f));
 
-                        const f32 tile_size = 32;
-                        const Vector2 uv0 = tile->type == TT_Grass ? v2z() : v2(tile_size / 512.f, 0.f);
-                        const Vector2 uv1 = tile->type == TT_Grass ? v2s(tile_size / 512.f) : v2((tile_size / 512.f) * 2.f, tile_size / 512.f);
+                        f32 tile_size = 32;
+                        Vector2 uv0 = tile->type == TT_Grass ? v2z() : v2(tile_size / 512.f, 0.f);
+                        Vector2 uv1 = tile->type == TT_Grass ? v2s(tile_size / 512.f) : v2((tile_size / 512.f) * 2.f, tile_size / 512.f);
 
-                        const Rect rect = { tmin, tmax };
+                        Rect rect = { tmin, tmax };
                         imm_textured_rect(rect, -5.f - (f32)chunk->z, uv0, uv1, v4s(1.f));
                     }
                 }
@@ -606,7 +606,7 @@ DLL_EXPORT void tick_game(f32 dt) {
             imm_flush();
 
             for (entity_iterator(em)) {
-                Entity* const entity = entity_from_iterator(iter);
+                Entity* entity = entity_from_iterator(iter);
 
                 switch (entity->type) {
 #define DRAW_ENTITIES(type, tick, draw) \
@@ -617,22 +617,22 @@ DLL_EXPORT void tick_game(f32 dt) {
             }
         }
     }
-    const f64 draw_duration = g_platform->time_in_seconds() - before_draw;
+    f64 draw_duration = g_platform->time_in_seconds() - before_draw;
 
     {
-        const Rect viewport = { v2z(), v2((f32)g_platform->window_width, (f32)g_platform->window_height) };
+        Rect viewport = { v2z(), v2((f32)g_platform->window_width, (f32)g_platform->window_height) };
         set_shader(find_shader(from_cstr("assets/shaders/font")));
         draw_right_handed(viewport);
 
-        Font_Collection* const fc = find_font_collection(from_cstr("assets/fonts/Menlo-Regular"));
-        Font* const font = font_at_size(fc, 48);
+        Font_Collection* fc = find_font_collection(from_cstr("assets/fonts/Menlo-Regular"));
+        Font* font = font_at_size(fc, 48);
         set_uniform_texture("atlas", font->atlas);
 
         char camera_debug_string[256];
-        Camera* const camera = find_entity(em, em->camera_id);
+        Camera* camera = find_entity(em, em->camera_id);
         if (camera) {
-            const Vector2 mouse_location = get_mouse_pos_in_world_space(camera);
-            Tile* const tile_under_mouse = find_tile_at(em, (int)mouse_location.x, (int)mouse_location.y, 0);
+            Vector2 mouse_location = get_mouse_pos_in_world_space(camera);
+            Tile* tile_under_mouse = find_tile_at(em, (int)mouse_location.x, (int)mouse_location.y, 0);
 
             if (tile_under_mouse) {
                 const char* type_string = tile_type_names[tile_under_mouse->type];
@@ -647,7 +647,7 @@ DLL_EXPORT void tick_game(f32 dt) {
             else sprintf(camera_debug_string, "None");
         }
 
-        const f64 precise_dt = g_platform->current_frame_time - g_platform->last_frame_time;
+        f64 precise_dt = g_platform->current_frame_time - g_platform->last_frame_time;
 
         char buffer[512];
         sprintf(

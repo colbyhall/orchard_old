@@ -66,17 +66,17 @@ b32 upload_texture2d(Texture2d* t) {
 }
 
 b32 init_shader(Shader* shader) {
-    const GLuint program_id = glCreateProgram();
+    GLuint program_id = glCreateProgram();
 
-    const GLuint vert_id = glCreateShader(GL_VERTEX_SHADER);
-    const GLuint frag_id = glCreateShader(GL_FRAGMENT_SHADER);
+    GLuint vert_id = glCreateShader(GL_VERTEX_SHADER);
+    GLuint frag_id = glCreateShader(GL_FRAGMENT_SHADER);
 
-    const GLchar* shader_header = "#version 330 core\n";
+    GLchar* shader_header = "#version 330 core\n";
 
     assert(shader->source.data && shader->source.len);
 
-    const GLchar* vert_shader[] = { shader_header, "#define VERTEX 1\n", (const GLchar*)shader->source.data };
-    const GLchar* frag_shader[] = { shader_header, "#define FRAGMENT 1\n", (const GLchar*)shader->source.data };
+    GLchar* vert_shader[] = { shader_header, "#define VERTEX 1\n", (GLchar*)shader->source.data };
+    GLchar* frag_shader[] = { shader_header, "#define FRAGMENT 1\n", (GLchar*)shader->source.data };
 
     glShaderSource(vert_id, 3, vert_shader, 0);
     glShaderSource(frag_id, 3, frag_shader, 0);
@@ -146,7 +146,7 @@ b32 free_shader(Shader* shader) {
     return false; // @TODO
 }
 
-static const char* get_shader_var_type_string(GLenum type) {
+static char* get_shader_var_type_string(GLenum type) {
     switch (type) {
         case GL_FLOAT:      return "f32";
         case GL_FLOAT_VEC2: return "Vector2";
@@ -161,15 +161,15 @@ static const char* get_shader_var_type_string(GLenum type) {
 }
 
 static
-Shader_Uniform* find_uniform(const char* name, GLenum type) {
-    Shader* const s = get_bound_shader();
+Shader_Uniform* find_uniform(char* name, GLenum type) {
+    Shader* s = get_bound_shader();
     if (!s) {
         o_log_error("[OpenGL] Tried to set uniform but no shader was bound");
         return false;
     }
 
     for (int i = 0; i < s->uniform_count; ++i) {
-        Shader_Uniform* const it = &s->uniforms[i];
+        Shader_Uniform* it = &s->uniforms[i];
 
         if (str_cmp(name, it->name) != 0) continue;
 
@@ -184,16 +184,16 @@ Shader_Uniform* find_uniform(const char* name, GLenum type) {
     return 0;
 }
 
-b32 set_uniform_m4(const char* name, Matrix4 m) {
-    Shader_Uniform* const var = find_uniform(name, GL_FLOAT_MAT4);
+b32 set_uniform_m4(char* name, Matrix4 m) {
+    Shader_Uniform* var = find_uniform(name, GL_FLOAT_MAT4);
     if (!var) return false; 
 
     glUniformMatrix4fv(var->location, 1, GL_FALSE, m.e);
     return true;
 }
 
-b32 set_uniform_texture(const char* name, Texture2d t) {
-    Shader_Uniform* const var = find_uniform(name, GL_SAMPLER_2D);
+b32 set_uniform_texture(char* name, Texture2d t) {
+    Shader_Uniform* var = find_uniform(name, GL_SAMPLER_2D);
     if (!var) return false; 
 
     glActiveTexture(GL_TEXTURE0 + var->location);
@@ -203,8 +203,8 @@ b32 set_uniform_texture(const char* name, Texture2d t) {
     return true;
 }
 
-b32 set_uniform_v4(const char* name, Vector4 v) {
-    Shader_Uniform* const var = find_uniform(name, GL_FLOAT_VEC4);
+b32 set_uniform_v4(char* name, Vector4 v) {
+    Shader_Uniform* var = find_uniform(name, GL_FLOAT_VEC4);
     if (!var) return false; 
 
     glUniform4f(var->location, v.x, v.y, v.z, v.w);
@@ -336,7 +336,7 @@ b32 init_framebuffer(int width, int height, int flags, Framebuffer* framebuffer)
 }
 
 b32 free_framebuffer(Framebuffer* framebuffer) {
-    const int flags = framebuffer->flags;
+    int flags = framebuffer->flags;
 
     GLuint textures_to_delete[FCI_Count + 1] = { 0 }; // + 1 for the depth buffer
     int num_textures_to_delete = 0;
@@ -356,7 +356,7 @@ b32 free_framebuffer(Framebuffer* framebuffer) {
 }
 
 b32 resize_framebuffer(Framebuffer* framebuffer, int width, int height) {
-    const int flags = framebuffer->flags;
+    int flags = framebuffer->flags;
     b32 ok = free_framebuffer(framebuffer);
     ok &= init_framebuffer(width, height, flags, framebuffer);
     return ok;
@@ -368,7 +368,7 @@ void begin_framebuffer(Framebuffer framebuffer) {
     GLuint attachments[FCI_Count] = { 0 };
     int num_attachments = 0;
     
-    const int flags = framebuffer.flags;
+    int flags = framebuffer.flags;
     if ((flags & FF_Position) != 0) attachments[num_attachments++] = GL_COLOR_ATTACHMENT0 + FCI_Position;
     if ((flags & FF_Normal) != 0)   attachments[num_attachments++] = GL_COLOR_ATTACHMENT0 + FCI_Normal;
     if ((flags & FF_Albedo) != 0)   attachments[num_attachments++] = GL_COLOR_ATTACHMENT0 + FCI_Albedo;

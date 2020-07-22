@@ -22,17 +22,17 @@ Allocator heap_allocator(void) {
 }
 
 static void* arena_alloc(Allocator allocator, void* ptr, usize size, usize alignment) {
-    Memory_Arena* const arena = allocator.data;
+    Memory_Arena* arena = allocator.data;
 
     if (size) {
         if (ptr) {
-            u8* const result = arena_alloc(allocator, 0, size, alignment);
+            u8* result = arena_alloc(allocator, 0, size, alignment);
             mem_copy(result, ptr, size);
             return result;
         }
 
         u8* result = arena->base + arena->used;
-        const usize offset = get_alignment_offset(result, alignment);
+        usize offset = get_alignment_offset(result, alignment);
         assert(arena->used + size + offset < arena->total);
         result += offset;
         arena->used += size + offset;
@@ -45,7 +45,7 @@ static void* arena_alloc(Allocator allocator, void* ptr, usize size, usize align
 Allocator arena_allocator_raw(void* base, usize size) {
     assert(sizeof(Memory_Arena) < size);
 
-    Memory_Arena* const arena = base;
+    Memory_Arena* arena = base;
     *arena = (Memory_Arena) { 
         (u8*)base + sizeof(Memory_Arena),
         0,
@@ -69,7 +69,7 @@ Allocator null_allocator(void) {
 }
 
 static void* pool_alloc(Allocator allocator, void* ptr, usize size, usize alignment) {
-    Pool_Allocator* const pool = allocator.data;
+    Pool_Allocator* pool = allocator.data;
 
     if (size) {
         if (ptr) {
@@ -77,7 +77,7 @@ static void* pool_alloc(Allocator allocator, void* ptr, usize size, usize alignm
             int old_size = 0;
             b32 found_allocation = false;
             for (int i = 0; i < pool->bucket_count; ++i) {
-                Pool_Bucket* const bucket = &pool->buckets[i];
+                Pool_Bucket* bucket = &pool->buckets[i];
 
                 if (bucket->allocation == ptr) found_allocation = true;
                 if (found_allocation && bucket->allocation && bucket->allocation != ptr) break;
@@ -105,7 +105,7 @@ static void* pool_alloc(Allocator allocator, void* ptr, usize size, usize alignm
         int start_index = -1;
         int space_found = 0;
         for (int i = 0; i < pool->bucket_count; ++i) {
-            const Pool_Bucket bucket = pool->buckets[i];
+            Pool_Bucket bucket = pool->buckets[i];
             if (!bucket.allocation && start_index == -1) {
                 start_index = i;
             } else if (bucket.allocation) {
@@ -122,11 +122,11 @@ static void* pool_alloc(Allocator allocator, void* ptr, usize size, usize alignm
         if (start_index == -1 || space_found * pool->bucket_cap < (int)size) return 0;
 
         // Find the allocation in the raw memory
-        u8* const allocation = pool->memory + (start_index * pool->bucket_cap); // @TODO(colby): alignment
+        u8* allocation = pool->memory + (start_index * pool->bucket_cap); // @TODO(colby): alignment
 
         // Update bucket data on pool allocator
         for (int i = 0; i < space_found; ++i) {
-            Pool_Bucket* const bucket = pool->buckets + i + start_index;
+            Pool_Bucket* bucket = pool->buckets + i + start_index;
             bucket->allocation = allocation;
             bucket->used = (int)(size > pool->bucket_cap ? pool->bucket_cap : size);
             size -= pool->bucket_cap;
@@ -138,7 +138,7 @@ static void* pool_alloc(Allocator allocator, void* ptr, usize size, usize alignm
     // Find al the buckets that have ptr as their allocation and reset their data
     b32 found_allocation = false;
     for (int i = 0; i < pool->bucket_count; ++i) {
-        Pool_Bucket* const bucket = &pool->buckets[i];
+        Pool_Bucket* bucket = &pool->buckets[i];
         if (bucket->allocation == ptr) found_allocation = true;
 
         if (found_allocation && bucket->allocation != ptr) break;
@@ -156,11 +156,11 @@ static void* pool_alloc(Allocator allocator, void* ptr, usize size, usize alignm
 }
 
 Allocator pool_allocator(Allocator allocator, int bucket_count, int bucket_cap) {
-    Pool_Bucket* const buckets = mem_alloc_array(allocator, Pool_Bucket, bucket_count);
+    Pool_Bucket* buckets = mem_alloc_array(allocator, Pool_Bucket, bucket_count);
     mem_set(buckets, 0, bucket_count * sizeof(Pool_Bucket));
 
-    u8* const allocator_data = mem_alloc(allocator, bucket_count * bucket_cap + sizeof(Pool_Allocator));
-    Pool_Allocator* const header = (Pool_Allocator*)allocator_data;
+    u8* allocator_data = mem_alloc(allocator, bucket_count * bucket_cap + sizeof(Pool_Allocator));
+    Pool_Allocator* header = (Pool_Allocator*)allocator_data;
     *header = (Pool_Allocator) { buckets, bucket_count, bucket_cap, allocator_data + sizeof(Pool_Allocator) };
 
     return (Allocator) { header, pool_alloc };

@@ -3,7 +3,7 @@
 
 // Created by Björn Höhrmann
 // @see http://bjoern.hoehrmann.de/utf-8/decoder/dfa/
-static const u8 utf8d[] = {
+static u8 utf8d[] = {
     // The first part of the table maps bytes to character classes that
     // to reduce the size of the transition table and create bitmasks.
      0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
@@ -57,7 +57,7 @@ void step_rune_iterator(Rune_Iterator* iter) {
     assert(can_step_rune_iterator(*iter));
 
     for (; iter->index < iter->the_string.len; ++iter->index) {
-        const u8 c = iter->the_string.data[iter->index];
+        u8 c = iter->the_string.data[iter->index];
         utf8_decode(&iter->decoder_state, &iter->rune, c);
 
         if (iter->decoder_state == UTF8_REJECT) return;
@@ -93,7 +93,7 @@ String advance_string(String the_string, int amount) {
 
 int find_from_left(String the_string, Rune r) {
     for (rune_iterator(the_string)) {
-        const Rune o = rune(iter);
+        Rune o = rune(iter);
         if (o == r) return iter.index;
     }
 
@@ -109,7 +109,7 @@ b32 string_equal(String a, String b) {
 }
 
 String copy_string(String a, Allocator allocator) {
-    u8* const data = mem_alloc_array(allocator, u8, a.len + 1);
+    u8* data = mem_alloc_array(allocator, u8, a.len + 1);
     mem_copy(data, a.data, a.len);
     data[a.len] = 0;
     return (String) { data, a.len, allocator };

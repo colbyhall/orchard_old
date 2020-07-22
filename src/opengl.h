@@ -265,9 +265,9 @@ typedef struct Shader {
 b32 init_shader(Shader* shader);
 b32 free_shader(Shader* shader);
 
-b32 set_uniform_m4(const char* name, Matrix4 m);
-b32 set_uniform_texture(const char* name, Texture2d t);
-b32 set_uniform_v4(const char* name, Vector4 v);
+b32 set_uniform_m4(char* name, Matrix4 m);
+b32 set_uniform_texture(char* name, Texture2d t);
+b32 set_uniform_v4(char* name, Vector4 v);
 
 void set_shader(Shader* s);
 Shader* get_bound_shader(void);

@@ -57,15 +57,15 @@ void draw_mesh(Mesh* m, Vector3 position, Quaternion rotation, Vector3 scale) {
 }
 
 void set_mesh_vertex_format(void) {
-    const GLuint position_loc = 0;
+    GLuint position_loc = 0;
     glVertexAttribPointer(position_loc, 3, GL_FLOAT, GL_FALSE, sizeof(Mesh_Vertex), 0);
     glEnableVertexAttribArray(position_loc);
     
-    const GLuint normal_loc = 1;
+    GLuint normal_loc = 1;
     glVertexAttribPointer(normal_loc, 3, GL_FLOAT, GL_FALSE, sizeof(Mesh_Vertex), (void*)sizeof(Vector3));
     glEnableVertexAttribArray(normal_loc);
 
-    const GLuint uv_loc = 2;
+    GLuint uv_loc = 2;
     glVertexAttribPointer(uv_loc, 2, GL_FLOAT, GL_FALSE, sizeof(Mesh_Vertex), (void*)(sizeof(Vector3) + sizeof(Vector3)));
     glEnableVertexAttribArray(uv_loc);
 }
@@ -85,7 +85,7 @@ b32 init_font_collection(u8* data, int len, Allocator asset_memory, Font_Collect
     //               later we will parse the ttf file in a similar way to STBTT.
     //               Linear search is exactly 17 times slower than parsing for 65536 glyphs.
     for (int codepoint = 0; codepoint < 0x110000; ++codepoint) {
-        const int idx = stbtt_FindGlyphIndex(&collection->info, codepoint);
+        int idx = stbtt_FindGlyphIndex(&collection->info, codepoint);
         if (idx <= 0) continue;
         glyphs_found += 1;
         collection->codepoint_indices[idx] = codepoint;
@@ -101,7 +101,7 @@ Font* font_at_size(Font_Collection* collection, int size) {
     size = CLAMP(size, 2, 512);
 
     for (int i = 0; i < collection->font_count; ++i) {
-        Font* const f = &collection->fonts[i];
+        Font* f = &collection->fonts[i];
         if (f->size == size) return f;
     }
 
@@ -110,13 +110,13 @@ Font* font_at_size(Font_Collection* collection, int size) {
     int ascent, descent, line_gap;
     stbtt_GetFontVMetrics(&collection->info, &ascent, &descent, &line_gap);
 
-    Font* const f = &collection->fonts[collection->font_count++];
+    Font* f = &collection->fonts[collection->font_count++];
 
     f->size = size;
     f->info = &collection->info;
     f->glyph_count = collection->codepoint_count;
 
-    const f32 font_scale = stbtt_ScaleForPixelHeight(&collection->info, (f32)size);
+    f32 font_scale = stbtt_ScaleForPixelHeight(&collection->info, (f32)size);
     f->ascent   = (f32)ascent * font_scale;
     f->descent  = (f32)descent * font_scale;
     f->line_gap = (f32)line_gap * font_scale;
@@ -137,7 +137,7 @@ Font* font_at_size(Font_Collection* collection, int size) {
         v_oversample = 8;
     }
 
-    Texture2d* const atlas = &f->atlas;
+    Texture2d* atlas = &f->atlas;
     atlas->depth  = 1;
     atlas->width  = FONT_ATLAS_SIZE;
     atlas->height = FONT_ATLAS_SIZE;
@@ -145,7 +145,7 @@ Font* font_at_size(Font_Collection* collection, int size) {
     atlas->pixels = mem_alloc_array(collection->asset_memory, u8, atlas->width * atlas->height); // @Leak
 
     stbtt_pack_context pc;
-    stbtt_packedchar* const pdata = mem_alloc_array(collection->asset_memory, stbtt_packedchar, collection->codepoint_count); // @Leak
+    stbtt_packedchar* pdata = mem_alloc_array(collection->asset_memory, stbtt_packedchar, collection->codepoint_count); // @Leak
 
     stbtt_pack_range pr;
     stbtt_PackBegin(&pc, atlas->pixels, atlas->width, atlas->height, 0, 1, 0);
@@ -160,12 +160,12 @@ Font* font_at_size(Font_Collection* collection, int size) {
     stbtt_PackFontRanges(&pc, collection->info.data, 0, &pr, 1);
     stbtt_PackEnd(&pc);
 
-    const b32 ok = upload_texture2d(atlas);
+    b32 ok = upload_texture2d(atlas);
     if (!ok) assert(false);
 
     f->glyphs = mem_alloc_array(collection->asset_memory, Font_Glyph, collection->codepoint_count);
     for (int i = 0; i < collection->codepoint_count; ++i) {
-        Font_Glyph* const g = f->glyphs + i;
+        Font_Glyph* g = f->glyphs + i;
 
         g->uv0 = v2((f32)pdata[i].x0 / (f32)atlas->width, (f32)pdata[i].y1 / (f32)atlas->width);
         g->uv1 = v2((f32)pdata[i].x1 / (f32)atlas->width, (f32)pdata[i].y0 / (f32)atlas->width);
@@ -181,7 +181,7 @@ Font* font_at_size(Font_Collection* collection, int size) {
 }
 
 Font_Glyph* glyph_from_rune(Font* f, Rune r) {
-    const int index = stbtt_FindGlyphIndex(f->info, r);
+    int index = stbtt_FindGlyphIndex(f->info, r);
     if (index > 0) {
         assert(index < f->glyph_count);
         return &f->glyphs[index];
@@ -260,9 +260,9 @@ void refresh_shader_transform(void) {
 }
 
 void draw_right_handed(Rect viewport) {
-    const Vector2 draw_size = rect_size(viewport);
-    const f32 aspect_ratio  = draw_size.width / draw_size.height;
-    const f32 ortho_size    = draw_size.height / 2.f;
+    Vector2 draw_size = rect_size(viewport);
+    f32 aspect_ratio  = draw_size.width / draw_size.height;
+    f32 ortho_size    = draw_size.height / 2.f;
 
     draw_state->projection_matrix = m4_ortho(ortho_size, aspect_ratio, FAR_CLIP_PLANE, NEAR_CLIP_PLANE);
     draw_state->view_matrix       = m4_translate(v3(-draw_size.width / 2.f, -ortho_size, 0.f));
@@ -300,7 +300,7 @@ void imm_begin(void) {
 }
 
 void imm_flush(void) {
-    Shader* const bound_shader = get_bound_shader();
+    Shader* bound_shader = get_bound_shader();
     static b32 thrown_bound_shader_error = false;
     if (!bound_shader) {
         if (!thrown_bound_shader_error) { 
@@ -323,19 +323,19 @@ void imm_flush(void) {
 }
 
 void set_imm_vertex_format(void) {
-    const GLuint position_loc = 0;
+    GLuint position_loc = 0;
     glVertexAttribPointer(position_loc, 3, GL_FLOAT, GL_FALSE, sizeof(Immediate_Vertex), 0);
     glEnableVertexAttribArray(position_loc);
     
-    const GLuint normal_loc = 1;
+    GLuint normal_loc = 1;
     glVertexAttribPointer(normal_loc, 3, GL_FLOAT, GL_FALSE, sizeof(Immediate_Vertex), (void*)sizeof(Vector3));
     glEnableVertexAttribArray(normal_loc);
 
-    const GLuint uv_loc = 2;
+    GLuint uv_loc = 2;
     glVertexAttribPointer(uv_loc, 2, GL_FLOAT, GL_FALSE, sizeof(Immediate_Vertex), (void*)(sizeof(Vector3) + sizeof(Vector3)));
     glEnableVertexAttribArray(uv_loc);
 
-    const GLuint color_loc = 3;
+    GLuint color_loc = 3;
     glVertexAttribPointer(color_loc, 4, GL_FLOAT, GL_FALSE, sizeof(Immediate_Vertex), (void*)(sizeof(Vector3) + sizeof(Vector3) + sizeof(Vector2)));
     glEnableVertexAttribArray(color_loc);
 }
@@ -346,22 +346,22 @@ void imm_vertex(Vector3 position, Vector3 normal, Vector2 uv, Vector4 color) {
         imm_begin();
     }
 
-    Immediate_Vertex* const this_vertex = imm_renderer->vertices + imm_renderer->vertex_count++;
+    Immediate_Vertex* this_vertex = imm_renderer->vertices + imm_renderer->vertex_count++;
     *this_vertex = (Immediate_Vertex) { position, normal, uv, color };
 }
 
 void imm_textured_rect(Rect rect, f32 z, Vector2 uv0, Vector2 uv1, Vector4 color) {
-    const Vector3 top_left_pos      = v3(rect.min.x, rect.max.y, z);
-    const Vector3 top_right_pos     = v3xy(rect.max, z);
-    const Vector3 bottom_left_pos   = v3xy(rect.min, z);
-    const Vector3 bottom_right_pos  = v3(rect.max.x, rect.min.y, z);
+    Vector3 top_left_pos      = v3(rect.min.x, rect.max.y, z);
+    Vector3 top_right_pos     = v3xy(rect.max, z);
+    Vector3 bottom_left_pos   = v3xy(rect.min, z);
+    Vector3 bottom_right_pos  = v3(rect.max.x, rect.min.y, z);
 
-    const Vector2 top_left_uv       = v2(uv0.x, uv1.y);
-    const Vector2 top_right_uv      = v2(uv1.x, uv1.y);
-    const Vector2 bottom_left_uv    = v2(uv0.x, uv0.y);
-    const Vector2 bottom_right_uv   = v2(uv1.x, uv0.y);
+    Vector2 top_left_uv       = v2(uv0.x, uv1.y);
+    Vector2 top_right_uv      = v2(uv1.x, uv1.y);
+    Vector2 bottom_left_uv    = v2(uv0.x, uv0.y);
+    Vector2 bottom_right_uv   = v2(uv1.x, uv0.y);
 
-    const Vector3 normal = v3z(); // @Incomplete
+    Vector3 normal = v3z(); // @Incomplete
 
     imm_vertex(top_left_pos, normal, top_left_uv, color);
     imm_vertex(bottom_left_pos, normal, bottom_left_uv, color);
@@ -373,54 +373,54 @@ void imm_textured_rect(Rect rect, f32 z, Vector2 uv0, Vector2 uv1, Vector4 color
 }
 
 void imm_textured_border_rect(Rect rect, f32 z, f32 thickness, Vector2 uv0, Vector2 uv1, Vector4 color) {
-    const Vector2 size = rect_size(rect);
+    Vector2 size = rect_size(rect);
 
     // Left quad
     {
-        const Rect    left      = (Rect) { rect.min, v2(rect.min.x + thickness, rect.max.y) };
-        const Vector2 left_uv1  = v2(uv0.x + thickness / size.width * (uv1.x - uv0.x), uv1.y);
+        Rect    left      = (Rect) { rect.min, v2(rect.min.x + thickness, rect.max.y) };
+        Vector2 left_uv1  = v2(uv0.x + thickness / size.width * (uv1.x - uv0.x), uv1.y);
         imm_textured_rect(left, z, uv0, left_uv1, color);
     }
 
     // Right quad
     {
-        const Rect right        = (Rect) { v2(rect.max.x - thickness, rect.min.y), rect.max };
-        const Vector2 right_uv0 = v2(uv1.x - thickness / size.width * (uv1.x - uv0.x), uv0.y);
-        const Vector2 right_uv1 = v2(uv1.x - thickness / size.width * (uv1.x - uv0.x), uv1.y);
+        Rect right        = (Rect) { v2(rect.max.x - thickness, rect.min.y), rect.max };
+        Vector2 right_uv0 = v2(uv1.x - thickness / size.width * (uv1.x - uv0.x), uv0.y);
+        Vector2 right_uv1 = v2(uv1.x - thickness / size.width * (uv1.x - uv0.x), uv1.y);
         imm_textured_rect(right, z, right_uv0, right_uv1, color);
     }
 
     // Top quad
     {
-        const Rect top          = (Rect) { v2(rect.min.x, rect.max.y - thickness), rect.max };
-        const Vector2 top_uv0   = v2(uv0.x, uv1.y - thickness / size.height * (uv1.y - uv0.y));
+        Rect top          = (Rect) { v2(rect.min.x, rect.max.y - thickness), rect.max };
+        Vector2 top_uv0   = v2(uv0.x, uv1.y - thickness / size.height * (uv1.y - uv0.y));
         imm_textured_rect(top, z, top_uv0, uv1, color);
     }
 
     // Bottom quad
     {
-        const Rect bot          = (Rect) { rect.min, v2(rect.max.x, rect.min.y + thickness) };
-        const Vector2 bot_uv1   = v2(uv1.x, uv0.y + thickness / size.width * (uv1.y - uv0.y));
+        Rect bot          = (Rect) { rect.min, v2(rect.max.x, rect.min.y + thickness) };
+        Vector2 bot_uv1   = v2(uv1.x, uv0.y + thickness / size.width * (uv1.y - uv0.y));
         imm_textured_rect(bot, z, uv0, bot_uv1, color);
     }
 }
 
 void imm_textured_line(Vector2 a1, Vector2 a2, f32 z, f32 thickness, Vector2 uv0, Vector2 uv1, Vector4 color) {
-    const f32 height    = thickness / 2.f;
-    const Vector2 dir   = v2_norm(v2_sub(a2, a1));
-    const Vector2 perp  = v2_mul(v2_perp(dir), v2s(height));
+    f32 height    = thickness / 2.f;
+    Vector2 dir   = v2_norm(v2_sub(a2, a1));
+    Vector2 perp  = v2_mul(v2_perp(dir), v2s(height));
 
-    const Vector3 top_left      = v3xy(v2_sub(a2, perp), z);
-    const Vector3 bottom_left   = v3xy(v2_sub(a1, perp), z);
-    const Vector3 top_right     = v3xy(v2_add(a2, perp), z);
-    const Vector3 bottom_right  = v3xy(v2_add(a1, perp), z);
+    Vector3 top_left      = v3xy(v2_sub(a2, perp), z);
+    Vector3 bottom_left   = v3xy(v2_sub(a1, perp), z);
+    Vector3 top_right     = v3xy(v2_add(a2, perp), z);
+    Vector3 bottom_right  = v3xy(v2_add(a1, perp), z);
 
-    const Vector2 top_left_uv       = v2(uv0.x, uv1.y);
-    const Vector2 top_right_uv      = v2(uv1.x, uv1.y);
-    const Vector2 bottom_left_uv    = v2(uv0.x, uv0.y);
-    const Vector2 bottom_right_uv   = v2(uv1.x, uv0.y);
+    Vector2 top_left_uv       = v2(uv0.x, uv1.y);
+    Vector2 top_right_uv      = v2(uv1.x, uv1.y);
+    Vector2 bottom_left_uv    = v2(uv0.x, uv0.y);
+    Vector2 bottom_right_uv   = v2(uv1.x, uv0.y);
     
-    const Vector3 normal = v3s(0.f); // @Incomplete
+    Vector3 normal = v3s(0.f); // @Incomplete
 
     imm_vertex(top_left, normal, top_left_uv, color);
     imm_vertex(bottom_left, normal, bottom_left_uv, color);
@@ -432,13 +432,13 @@ void imm_textured_line(Vector2 a1, Vector2 a2, f32 z, f32 thickness, Vector2 uv0
 }
 
 void imm_arrow(Vector2 a1, Vector2 a2, f32 z, f32 thickness, Vector4 color) {
-    const f32 height = thickness * 2.f;
-    const Vector2 dir = v2_norm(v2_sub(a1, a2));
-    const Vector2 perp = v2_mul(v2_perp(dir), v2s(height));
+    f32 height = thickness * 2.f;
+    Vector2 dir = v2_norm(v2_sub(a1, a2));
+    Vector2 perp = v2_mul(v2_perp(dir), v2s(height));
 
-    const Vector2 down = v2_mul(dir, v2s(height));
-    const Vector2 l2 = v2_add(v2_add(a2, v2(-perp.x, -perp.y)), down);
-    const Vector2 r2 = v2_add(v2_add(a2, perp), down);
+    Vector2 down = v2_mul(dir, v2s(height));
+    Vector2 l2 = v2_add(v2_add(a2, v2(-perp.x, -perp.y)), down);
+    Vector2 r2 = v2_add(v2_add(a2, perp), down);
 
     imm_line(a2, l2, z, thickness, color);
     imm_line(a2, r2, z, thickness, color);
@@ -448,17 +448,17 @@ void imm_arrow(Vector2 a1, Vector2 a2, f32 z, f32 thickness, Vector4 color) {
 void imm_textured_circle(f32 radius, int segments, Vector2 xy, f32 z, Vector2 uv0, Vector2 uv1, Vector4 color) {
     assert(segments >= 3);
 
-    const f32 offset = (4.f * PI) / (f32)segments;
+    f32 offset = (4.f * PI) / (f32)segments;
     f32 theta = 0.f;
     for (int i = 0; i < segments; ++i) {
-        const Vector2 dir0 = v2rad(theta);
-        const Vector2 dir1 = v2rad(theta + offset);
+        Vector2 dir0 = v2rad(theta);
+        Vector2 dir1 = v2rad(theta + offset);
 
-        const Vector3 p0 = v3xy(xy, z);
-        const Vector3 p1 = v3xy(v2_add(p0.xy, v2_mul(dir0, v2s(radius))), z);
-        const Vector3 p2 = v3xy(v2_add(p0.xy, v2_mul(dir1, v2s(radius))), z);
+        Vector3 p0 = v3xy(xy, z);
+        Vector3 p1 = v3xy(v2_add(p0.xy, v2_mul(dir0, v2s(radius))), z);
+        Vector3 p2 = v3xy(v2_add(p0.xy, v2_mul(dir1, v2s(radius))), z);
 
-        const Vector3 normal = v3z(); // @Incomplete
+        Vector3 normal = v3z(); // @Incomplete
 
         imm_vertex(p0, normal, uv0, color);
         imm_vertex(p1, normal, uv0, color);
@@ -471,17 +471,17 @@ void imm_textured_circle(f32 radius, int segments, Vector2 xy, f32 z, Vector2 uv
 void imm_glyph(Font_Glyph* g, Font* font, Vector2 xy, f32 z, Vector4 color) {
     // Draw font from bottom up. Yes this makes doing paragraphs harder but it goes along with OpenGL's coordinate system
     xy = v2_sub(xy, v2(0.f, font->descent));
-    const f32 x0 = xy.x + g->bearing_x;
-    const f32 y1 = xy.y - g->bearing_y;
-    const f32 x1 = x0 + g->width;
-    const f32 y0 = y1 - g->height;
-    const Rect rect = rect_from_raw(x0, y0, x1, y1);
+    f32 x0 = xy.x + g->bearing_x;
+    f32 y1 = xy.y - g->bearing_y;
+    f32 x1 = x0 + g->width;
+    f32 y0 = y1 - g->height;
+    Rect rect = rect_from_raw(x0, y0, x1, y1);
 
     imm_textured_rect(rect, z, g->uv0, g->uv1, color);
 }
 
 Font_Glyph* imm_rune(Rune r, Font* font, Vector2 xy, f32 z, Vector4 color) {
-    Font_Glyph* const g = glyph_from_rune(font, r);
+    Font_Glyph* g = glyph_from_rune(font, r);
     if (g != 0) {
         imm_glyph(g, font, xy, z, color);
         return g;
@@ -491,16 +491,16 @@ Font_Glyph* imm_rune(Rune r, Font* font, Vector2 xy, f32 z, Vector4 color) {
 }
 
 void imm_string(String str, Font* font, f32 max_width, Vector2 xy, f32 z, Vector4 color) {
-    const Vector2 orig_xy = xy;
+    Vector2 orig_xy = xy;
 
-    Font_Glyph* const space_g = glyph_from_rune(font, ' ');
+    Font_Glyph* space_g = glyph_from_rune(font, ' ');
     for (int i = 0; i < str.len; ++i) {
         if (xy.x + space_g->advance > orig_xy.x + max_width) {
             xy.x = orig_xy.x;
             xy.y -= (f32)font->size;
         }
 
-        const char c = str.data[i]; // @TODO(colby): UTF8
+        char c = str.data[i]; // @TODO(colby): UTF8
         switch (c) {
         case '\n': {
             xy.x = orig_xy.x;
@@ -513,7 +513,7 @@ void imm_string(String str, Font* font, f32 max_width, Vector2 xy, f32 z, Vector
             xy.x += space_g->advance * 4.f;
         } break;
         default: {
-            Font_Glyph* const g = imm_rune(c, font, xy, z, color);
+            Font_Glyph* g = imm_rune(c, font, xy, z, color);
             xy.x += g->advance;
         } break;
         }
@@ -524,22 +524,22 @@ void imm_textured_plane(Vector3 pos, Quaternion rot, Rect rect, Vector2 uv0, Vec
     Vector3 right = quat_right(rot);
     Vector3 forward = quat_forward(rot);
 
-    const Vector3 left = v3_mul(right, v3s(rect.min.x));
-    const Vector3 back = v3_mul(forward, v3s(rect.min.y));
+    Vector3 left = v3_mul(right, v3s(rect.min.x));
+    Vector3 back = v3_mul(forward, v3s(rect.min.y));
     right = v3_mul(right, v3s(rect.max.x));
     forward  = v3_mul(forward, v3s(rect.max.y));
 
-    const Vector3 top_left_pos      = v3_add(pos, v3_add(forward, left));
-    const Vector3 top_right_pos     = v3_add(pos, v3_add(forward, right));
-    const Vector3 bottom_left_pos   = v3_add(pos, v3_add(back, left));
-    const Vector3 bottom_right_pos  = v3_add(pos, v3_add(back, right));
+    Vector3 top_left_pos      = v3_add(pos, v3_add(forward, left));
+    Vector3 top_right_pos     = v3_add(pos, v3_add(forward, right));
+    Vector3 bottom_left_pos   = v3_add(pos, v3_add(back, left));
+    Vector3 bottom_right_pos  = v3_add(pos, v3_add(back, right));
 
-    const Vector2 top_left_uv       = v2(uv0.x, uv1.y);
-    const Vector2 top_right_uv      = v2(uv1.x, uv1.y);
-    const Vector2 bottom_left_uv    = v2(uv0.x, uv0.y);
-    const Vector2 bottom_right_uv   = v2(uv1.x, uv0.y);
+    Vector2 top_left_uv       = v2(uv0.x, uv1.y);
+    Vector2 top_right_uv      = v2(uv1.x, uv1.y);
+    Vector2 bottom_left_uv    = v2(uv0.x, uv0.y);
+    Vector2 bottom_right_uv   = v2(uv1.x, uv0.y);
 
-    const Vector3 normal = v3s(0.f); // @Incomplete
+    Vector3 normal = v3s(0.f); // @Incomplete
 
     imm_vertex(top_left_pos, normal, top_left_uv, color);
     imm_vertex(bottom_left_pos, normal, bottom_left_uv, color);

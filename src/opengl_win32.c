@@ -91,7 +91,7 @@ b32 init_opengl(Platform* platform) {
     HWND window_handle = platform->window_handle;
     HDC window_context = GetDC(window_handle);
 
-    const s32 attrib_list[] =
+    int attrib_list[] =
     {
         WGL_DRAW_TO_WINDOW_ARB, GL_TRUE,
         WGL_ACCELERATION_ARB, WGL_FULL_ACCELERATION_ARB,
@@ -110,7 +110,7 @@ b32 init_opengl(Platform* platform) {
     DescribePixelFormat(window_context, pixel_format, sizeof(spf), &spf);
     SetPixelFormat(window_context, pixel_format, &spf);
 
-    const s32 win32_opengl_attribs[] = {
+    int win32_opengl_attribs[] = {
         WGL_CONTEXT_MAJOR_VERSION_ARB, 3,
         WGL_CONTEXT_MINOR_VERSION_ARB, 3,
         WGL_CONTEXT_FLAGS_ARB, WGL_CONTEXT_FORWARD_COMPATIBLE_BIT_ARB,
