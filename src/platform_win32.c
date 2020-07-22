@@ -469,6 +469,7 @@ int main(int argv, char** argc) {
     reset_arena(the_platform.frame_arena);
 
     ShowWindow(the_platform.window_handle, SW_SHOW);
+    ShowWindow(the_platform.window_handle, SW_MAXIMIZE);
 
     LARGE_INTEGER last_frame_time;
     QueryPerformanceCounter(&last_frame_time);

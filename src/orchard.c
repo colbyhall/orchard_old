@@ -416,7 +416,7 @@ static void tick_pawn(Entity_Manager* em, Entity* entity, f32 dt) {
             f32 y = random_f32_in_range(&seed, 0.f, max);
             pawn->target_location = v2(x, y);
 
-            o_log("Pawn with id %lu will be moving toward (%f, %f)", pawn->id, pawn->target_location.x, pawn->target_location.y);
+            o_log("[Game] Pawn with id %lu will be moving toward (%f, %f)", pawn->id, pawn->target_location.x, pawn->target_location.y);
         }
     } else {
         Vector2 to_point_norm = v2_div(to_point, v2s(to_point_len));
@@ -499,7 +499,7 @@ static void regen_map(Entity_Manager* em, Random_Seed seed) {
         f32 target_x = random_f32_in_range(&seed, 0.f, max);
         f32 target_y = random_f32_in_range(&seed, 0.f, max);
 
-        o_log("Pawn %i is starting at (%f, %f) and will be moving toward (%f, %f)", i + 1, start_x, start_y, target_x, target_y);
+        o_log("[Game] Pawn %i is starting at (%f, %f) and will be moving toward (%f, %f)", i + 1, start_x, start_y, target_x, target_y);
         make_pawn(em, v2(start_x, start_y), v2(target_x, target_y));
     }
 }
@@ -524,7 +524,10 @@ DLL_EXPORT void init_game(Platform* platform) {
     // Init Game State
     game_state = mem_alloc_struct(platform->permanent_arena, Game_State);
     game_state->entity_manager = make_entity_manager(platform->permanent_arena);
-    if (game_state->is_initialized) return;
+    if (game_state->is_initialized) {
+        o_log("[Game] Found new build and reloaded code");
+        return;
+    }
     game_state->is_initialized = true;
 
     regen_map(

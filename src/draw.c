@@ -288,7 +288,7 @@ void draw_persp(Vector3 pos, Quaternion rot, f32 aspect_ratio, f32 fov) {
 }
 
 void draw_from(Vector2 pos, f32 ortho_size) {
-    draw_state->projection_matrix = m4_ortho(ortho_size, (f32)draw_state->back_buffer.width / (f32)draw_state->back_buffer.height, FAR_CLIP_PLANE, NEAR_CLIP_PLANE);
+    draw_state->projection_matrix = m4_ortho(ortho_size, (f32)g_platform->window_width / (f32)g_platform->window_height, FAR_CLIP_PLANE, NEAR_CLIP_PLANE);
     draw_state->view_matrix       = m4_translate(v3_inverse(v3xy(pos, 0.f)));
     draw_state->model_matrix      = m4_identity();
 
