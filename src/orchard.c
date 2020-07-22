@@ -597,11 +597,11 @@ DLL_EXPORT void tick_game(f32 dt) {
                         Vector2 tmax = v2_add(tmin, v2s(1.f));
 
                         f32 texel_size = 1.f / 512.f;
-                        f32 half_texel_size = texel_size / 4.f;
+                        f32 quater_texel_size = texel_size / 4.f;
 
                         f32 tile_size = 32;
-                        Vector2 uv0 = v2_add(tile->type == TT_Grass ? v2z() : v2(tile_size / 512.f, 0.f), v2s(half_texel_size));
-                        Vector2 uv1 = v2_sub(tile->type == TT_Grass ? v2s(tile_size / 512.f) : v2((tile_size / 512.f) * 2.f, tile_size / 512.f), v2s(half_texel_size));
+                        Vector2 uv0 = v2_add(tile->type == TT_Grass ? v2z() : v2(tile_size / 512.f, 0.f), v2s(quater_texel_size));
+                        Vector2 uv1 = v2_sub(tile->type == TT_Grass ? v2s(tile_size / 512.f) : v2((tile_size / 512.f) * 2.f, tile_size / 512.f), v2s(quater_texel_size));
 
                         Rect rect = { tmin, tmax };
                         imm_textured_rect(rect, -5.f - (f32)chunk->z, uv0, uv1, v4s(1.f));
