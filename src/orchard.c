@@ -148,6 +148,16 @@ typedef enum Tile_Type {
     TT_Count,
 } Tile_Type;
 
+static const char* tile_type_names[] = {
+    "Air",
+    "Grass",
+    "Dirt",
+    "Gravel",
+    "Stone",
+    "Sand",
+    "Water",
+};
+
 typedef struct Tile {
     Tile_Type type;
 } Tile;
@@ -253,6 +263,25 @@ static void* find_entity(Entity_Manager* em, Entity_Id id) {
         Entity* const entity = entity_from_iterator(iter);
 
         if (entity->id == id) return entity->derived;
+    }
+
+    return 0;
+}
+
+static Tile* find_tile_at(Entity_Manager* em, int x, int y, int z) {
+    const int chunk_x = x / CHUNK_SIZE;
+    const int chunk_y = y / CHUNK_SIZE;
+
+    if (x < 0 ||  y < 0) return 0;
+
+    for (int i = 0; i < em->chunk_count; ++i) {
+        Chunk chunk = em->chunks[i];
+        if (chunk.x == chunk_x && chunk.y == chunk_y && chunk.z == z) {
+            const int local_x = x - chunk_x * CHUNK_SIZE;
+            const int local_y = y - chunk_y * CHUNK_SIZE;
+            assert(local_x <= CHUNK_SIZE && local_y <= CHUNK_SIZE);
+            return &chunk.tiles[local_x + local_y * CHUNK_SIZE];
+        }
     }
 
     return 0;
@@ -369,18 +398,23 @@ static void tick_pawn(Entity_Manager* em, Entity* entity, f32 dt) {
     const f32 max_speed = 3.f;
     Pawn* const pawn = entity->derived;
 
-    Random_Seed seed = { g_platform->cycles() };
+    Random_Seed seed = init_seed((int)g_platform->time_in_seconds());
 
     const Vector2 to_point = v2_sub(pawn->target_location, pawn->location);
     const f32 to_point_len = v2_len(to_point);
     if (to_point_len < 0.1f) {
         pawn->idle_time += dt;
         if (pawn->idle_time >= 3.f) {
-            const f32 x = get_random_f32(seed, 0.f, 500.f);
-            iterate_seed(&seed);
-            const f32 y = get_random_f32(seed, 0.f, 500.f);
-            pawn->target_location = v2(x, y);
             pawn->idle_time = 0.f;
+
+            const int chunk_cap_sq = (int)sqrt(CHUNK_CAP);
+            const f32 max = (f32)(chunk_cap_sq * CHUNK_SIZE);
+
+            const f32 x = random_f32_in_range(&seed, 0.f, max);
+            const f32 y = random_f32_in_range(&seed, 0.f, max);
+            pawn->target_location = v2(x, y);
+
+            o_log("Pawn with id %lu will be moving toward (%f, %f)", pawn->id, pawn->target_location.x, pawn->target_location.y);
         }
     } else {
         const Vector2 to_point_norm = v2_div(to_point, v2s(to_point_len));
@@ -454,10 +488,17 @@ static void regen_map(Entity_Manager* em, Random_Seed seed) {
     Camera* const camera = make_camera(em, v2z(), 5.f);
     set_camera(em, camera);
 
-    for (int i = 0; i < 1; ++i) {
-        const f32 xy = get_random_f32(seed, 0.f, 500.f);
-        iterate_seed(&seed);
-        make_pawn(em, v2s(100.f), v2s(xy));
+    for (int i = 0; i < 64; ++i) {
+        const f32 max = (f32)(chunk_cap_sq * CHUNK_SIZE);
+
+        const f32 start_x = random_f32_in_range(&seed, 0.f, max);
+        const f32 start_y = random_f32_in_range(&seed, 0.f, max);
+
+        const f32 target_x = random_f32_in_range(&seed, 0.f, max);
+        const f32 target_y = random_f32_in_range(&seed, 0.f, max);
+
+        o_log("Pawn %i is starting at (%f, %f) and will be moving toward (%f, %f)", i + 1, start_x, start_y, target_x, target_y);
+        make_pawn(em, v2(start_x, start_y), v2(target_x, target_y));
     }
 }
 
@@ -484,7 +525,10 @@ DLL_EXPORT void init_game(Platform* platform) {
     if (game_state->is_initialized) return;
     game_state->is_initialized = true;
 
-    regen_map(game_state->entity_manager, (Random_Seed) { g_platform->cycles() });
+    regen_map(
+        game_state->entity_manager, 
+        init_seed((int)g_platform->time_in_seconds())
+    );
 }
 
 DLL_EXPORT void tick_game(f32 dt) {
@@ -584,15 +628,35 @@ DLL_EXPORT void tick_game(f32 dt) {
         Font* const font = font_at_size(fc, 48);
         set_uniform_texture("atlas", font->atlas);
 
+        char camera_debug_string[256];
+        Camera* const camera = find_entity(em, em->camera_id);
+        if (camera) {
+            const Vector2 mouse_location = get_mouse_pos_in_world_space(camera);
+            Tile* const tile_under_mouse = find_tile_at(em, (int)mouse_location.x, (int)mouse_location.y, 0);
+
+            if (tile_under_mouse) {
+                const char* type_string = tile_type_names[tile_under_mouse->type];
+                sprintf(
+                    camera_debug_string, 
+                    "%s (%i, %i)", 
+                    type_string, 
+                    (int)mouse_location.x, 
+                    (int)mouse_location.y
+                );
+            }
+            else sprintf(camera_debug_string, "None");
+        }
+
         const f64 precise_dt = g_platform->current_frame_time - g_platform->last_frame_time;
 
         char buffer[512];
         sprintf(
             buffer, 
-            "Frame Time: %ims\nDraw Time: %ims\nDraw Calls: %i", 
+            "Frame Time: %ims\nDraw Time: %ims\nDraw Calls: %i\nTile: %s", 
             (int)(precise_dt * 1000.0),
             (int)(draw_duration * 1000.0),
-            draw_state->num_draw_calls
+            draw_state->num_draw_calls,
+            camera != 0 ? camera_debug_string : "None"
         );
 
         imm_begin();

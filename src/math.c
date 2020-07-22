@@ -253,6 +253,24 @@ b32 rect_sweep_rect(Vector2 a1, Vector2 a2, Vector2 size, Rect b, Rect_Intersect
     return false;
 }
 
+void iterate_seed(Random_Seed* seed) { 
+    seed->seed = seed->seed * 21401323 + 1013424312; 
+}
+
+f32 random_f32(Random_Seed* seed) {
+    iterate_seed(seed);
+
+    const f32 tmp = 1.f;
+    f32 result;
+    *(int*)&result = (*(int*)&tmp & 0xFF800000) | (seed->seed & 0x007FFFFF);
+    return result - (int)result;
+}
+
+f32 random_f32_in_range(Random_Seed* seed, f32 min, f32 max) {
+    const f32 dist = max - min;
+    return random_f32(seed) * dist + min;
+}
+
 // Found this here https://gist.github.com/nowl/828013
 static const u8 perline_hash[] = {
     208, 34, 231, 213, 32, 248, 233, 56, 161, 78, 24, 140, 71, 48, 140, 254, 245, 255, 247, 247, 40, 
