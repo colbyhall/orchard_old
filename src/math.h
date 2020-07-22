@@ -49,6 +49,7 @@ inline f32 v2_cross(Vector2 a, Vector2 b)   { return a.x * b.y - a.y * b.x; }
 inline Vector2 v2_perp(Vector2 a)           { return v2(a.y, -a.x); }
 inline Vector2 v2_negate(Vector2 a)         { return v2(-a.x, -a.y); }
 inline Vector2 v2_round(Vector2 a)          { return v2(roundf(a.x), roundf(a.y)); }
+inline Vector2 v2_floor(Vector2 a)          { return v2((f32)((int)a.x), (f32)((int)a.y)); }
 
 inline Vector2 v2_lerp(Vector2 a, Vector2 b, f32 t) {
     return v2_add(v2_mul(a, v2s(1.f - t)), v2_mul(b, v2s(t)));

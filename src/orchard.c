@@ -332,6 +332,8 @@ typedef struct Camera {
     DEFINE_CHILD_ENTITY;
     f32 current_ortho_size;
     f32 target_ortho_size;
+
+
 } Camera;
 
 static Vector2 get_mouse_pos_in_world_space(Camera* camera) {
@@ -594,9 +596,12 @@ DLL_EXPORT void tick_game(f32 dt) {
                         Vector2 tmin = v2_add(pos, v2((f32)x, (f32)y));
                         Vector2 tmax = v2_add(tmin, v2s(1.f));
 
+                        f32 texel_size = 1.f / 512.f;
+                        f32 half_texel_size = texel_size / 4.f;
+
                         f32 tile_size = 32;
-                        Vector2 uv0 = tile->type == TT_Grass ? v2z() : v2(tile_size / 512.f, 0.f);
-                        Vector2 uv1 = tile->type == TT_Grass ? v2s(tile_size / 512.f) : v2((tile_size / 512.f) * 2.f, tile_size / 512.f);
+                        Vector2 uv0 = v2_add(tile->type == TT_Grass ? v2z() : v2(tile_size / 512.f, 0.f), v2s(half_texel_size));
+                        Vector2 uv1 = v2_sub(tile->type == TT_Grass ? v2s(tile_size / 512.f) : v2((tile_size / 512.f) * 2.f, tile_size / 512.f), v2s(half_texel_size));
 
                         Rect rect = { tmin, tmax };
                         imm_textured_rect(rect, -5.f - (f32)chunk->z, uv0, uv1, v4s(1.f));
@@ -604,6 +609,17 @@ DLL_EXPORT void tick_game(f32 dt) {
                 }
             }
             imm_flush();
+
+            Vector2 mouse_location = get_mouse_pos_in_world_space(camera);
+            Tile* tile_under_mouse = find_tile_at(em, (int)mouse_location.x, (int)mouse_location.y, 0);
+            if (tile_under_mouse) {
+                Vector2 min = v2_floor(mouse_location);
+                Rect hovered_tile_draw = { min, v2_add(min, v2s(1.f)) };
+                imm_begin();
+                imm_rect(hovered_tile_draw, -5.f, v4(1.f, 1.f, 1.f, 0.2f));
+                imm_border_rect(hovered_tile_draw, -5.f, 0.05f, v4s(1.f));
+                imm_flush();
+            }
 
             for (entity_iterator(em)) {
                 Entity* entity = entity_from_iterator(iter);

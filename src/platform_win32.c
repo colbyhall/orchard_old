@@ -14,6 +14,10 @@ Platform* g_platform;
 static b32 is_running = true;
 static LARGE_INTEGER g_qpc_freq;
 
+// Use discrete GPU
+__declspec(dllexport) DWORD NvOptimusEnablement = 0x01;
+__declspec(dllexport) DWORD AmdPowerXpressRequestHighPerformance = 0x01;
+
 typedef struct Game_Code {
     HMODULE library;
     u64 last_write_time;

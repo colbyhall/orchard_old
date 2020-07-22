@@ -19,10 +19,6 @@ static void gl_message_callback(GLenum source, GLenum type, GLuint id, GLenum se
     }
 }
 
-// Use discrete GPU
-__declspec(dllexport) DWORD NvOptimusEnablement = 0x01;
-__declspec(dllexport) DWORD AmdPowerXpressRequestHighPerformance = 0x01;
-
 b32 init_opengl(Platform* platform) {
     Allocator arena = platform->permanent_arena;
 
@@ -127,7 +123,12 @@ b32 init_opengl(Platform* platform) {
 
     g_gl_context->is_initialized = true;
 
-    o_log_verbose("[OpenGL] Loaded opengl with version %i:%i.", g_gl_context->maj_version, g_gl_context->min_version);
+    o_log_verbose(
+        "[OpenGL] Loaded opengl with version %i:%i using %s", 
+        g_gl_context->maj_version, 
+        g_gl_context->min_version, 
+        glGetString(GL_RENDERER)
+    );
 
     glEnable(GL_FRAMEBUFFER_SRGB); 
     glDepthMask(GL_TRUE);
