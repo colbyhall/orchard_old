@@ -136,11 +136,31 @@ u64 hash_string(void* a, void* b, int size) {
     return fnv1_hash(s_a->data, s_a->len);
 }
 
+typedef enum Wall_Type {
+    WT_Steel = 0,
+} Wall_Type;
+
+typedef enum Wall_Visual {
+    WV_North,
+    WV_South,
+    WV_East,
+    WV_West,
+    WV_South_East,
+    WV_South_West,
+    WV_East_West,
+    WV_Cross,
+
+    WV_Count,
+} Wall_Visual;
+
+typedef struct Wall {
+    Wall_Type type;
+    Wall_Visual visual;
+} Wall;
+
 typedef enum Tile_Type {
     TT_Open = 0,
     TT_Steel,
-
-    TT_Count,
 } Tile_Type;
 
 static const char* tile_type_names[] = {
@@ -148,8 +168,17 @@ static const char* tile_type_names[] = {
     "Steel",
 };
 
+typedef enum Tile_Content {
+    TC_None = 0,
+    TC_Wall
+} Tile_Content;
+
 typedef struct Tile {
     Tile_Type type;
+    Tile_Content content;
+    union {
+        Wall wall;
+    };
 } Tile;
 
 #define CHUNK_SIZE 16
@@ -318,9 +347,80 @@ static void* _make_entity(Entity_Manager* em, int size, Entity_Type type) {
 }
 #define make_entity(em, type) _make_entity(em, sizeof(type), ET_ ## type)
 
+static void refresh_wall_visual(Entity_Manager* em, int x, int y, int z, b32 first) {
+    Tile* tile = find_tile_at(em, x, y, z);
+    if (!tile) return;
+    if (tile->content != TC_Wall && !first) return;
+
+    b32 has_north = false;
+    Tile* north = find_tile_at(em, x, y + 1, z);
+    if (north && north->content == TC_Wall) {
+        if (first) refresh_wall_visual(em, x, y + 1, z, false);
+        has_north = true;
+    }
+
+    b32 has_south = false;
+    Tile* south = find_tile_at(em, x, y - 1, z);
+    if (south && south->content == TC_Wall) {
+        if (first) refresh_wall_visual(em, x, y - 1, z, false);
+        has_south = true;
+    }
+
+    b32 has_east = false;
+    Tile* east = find_tile_at(em, x + 1, y, z);
+    if (east && east->content == TC_Wall) {
+        if (first) refresh_wall_visual(em, x + 1, y, z, false);
+        has_east = true;
+    }
+
+    b32 has_west = false;
+    Tile* west = find_tile_at(em, x - 1, y, z);
+    if (west && west->content == TC_Wall) {
+        if (first) refresh_wall_visual(em, x - 1, y, z, false);
+        has_west = true;
+    }
+
+    if (tile->content != TC_Wall && first) return;
+
+    int num_surrounding = has_north + has_south + has_east + has_west;
+    switch (num_surrounding) {
+    case 0: 
+        tile->wall.visual = WV_South;
+        break;
+    case 1: {
+        Wall_Visual visual    = WV_South;
+        if (has_south) visual = WV_North;
+        if (has_east) visual  = WV_West;
+        if (has_west) visual  = WV_East;
+        tile->wall.visual = visual;
+    } break;
+    case 2: {
+        Wall_Visual visual = WV_South;
+        if (has_south && has_north) visual = WV_North;
+        if (has_east && has_west)   visual = WV_East_West;
+        if (has_east && has_north)  visual = WV_West;
+        if (has_west && has_north)  visual = WV_East;
+        if (has_east && has_south)  visual = WV_South_East;
+        if (has_west && has_south)  visual = WV_South_West;
+        tile->wall.visual = visual;
+    } break;
+    case 3: {
+        Wall_Visual visual = WV_Cross;
+        if (has_north && !has_south) visual = WV_East_West;
+        if (has_north && has_south && has_east) visual = WV_South_East;
+        if (has_north && has_south && has_west) visual = WV_South_West;
+        tile->wall.visual = visual;
+    } break;
+    case 4:
+        tile->wall.visual = WV_Cross;
+        break;
+    }
+}
+
 typedef enum Controller_Mode {
     CM_Normal,
     CM_Set_Tile,
+    CM_Set_Wall,
 } Controller_Mode;
 
 typedef struct Controller_Selection {
@@ -394,30 +494,85 @@ static void tick_controller(Entity_Manager* em, Entity* entity, f32 dt) {
         controller->location = v2_add(controller->location, v2_mul(v2_inverse(mouse_delta), v2s(speed)));
     }
 
-    if (was_key_pressed(KEY_F1)) controller->mode = !controller->mode;
+    // Tile Mode
+    if (was_key_pressed(KEY_F1)) {
+        if (controller->mode == CM_Set_Tile) controller->mode = CM_Normal;
+        controller->mode = CM_Set_Tile;
+    }
 
-    if (controller->mode == CM_Set_Tile) {
-        u8 selection_mouse_button = MOUSE_LEFT;
+    // Wall Mode
+    if (was_key_pressed(KEY_F2)) {
+        if (controller->mode == CM_Set_Wall) controller->mode = CM_Normal;
+        controller->mode = CM_Set_Wall;
+    }
 
-        controller->selection.valid = is_mouse_button_pressed(selection_mouse_button);
-        if (controller->selection.valid) {
-            if (was_mouse_button_pressed(selection_mouse_button)) controller->selection.start = mouse_pos_in_world;
-            controller->selection.current = mouse_pos_in_world;
-        }
+    u8 selection_mouse_button = MOUSE_LEFT;
 
-        if (was_mouse_button_released(selection_mouse_button)) {
-            Rect selection = rect_from_points(controller->selection.start, controller->selection.current);
+    controller->selection.valid = is_mouse_button_pressed(selection_mouse_button);
+    if (controller->selection.valid) {
+        if (was_mouse_button_pressed(selection_mouse_button)) controller->selection.start = mouse_pos_in_world;
+        controller->selection.current = mouse_pos_in_world;
+    }
 
-            int start_x = (int)selection.min.x;
-            int start_y = (int)selection.min.y;
-            int end_x = (int)selection.max.x + 1;
-            int end_y = (int)selection.max.y + 1;
+    if (was_mouse_button_released(selection_mouse_button)) {
+        Rect selection = rect_from_points(controller->selection.start, controller->selection.current);
+
+        int start_x = (int)selection.min.x;
+        int start_y = (int)selection.min.y;
+        int end_x = (int)selection.max.x + 1;
+        int end_y = (int)selection.max.y + 1;
+
+        switch (controller->mode) {
+        case CM_Set_Tile: {
             for (int x = start_x; x < end_x; ++x) {
                 for (int y = start_y; y < end_y; ++y) {
                     Tile* tile = find_tile_at(em, x, y, 0);
                     if (tile) tile->type = TT_Steel;
                 }
             }
+        } break;
+        case CM_Set_Wall: {
+            for (int x = start_x; x < end_x; ++x) {
+                Tile* start_y_tile = find_tile_at(em, x, start_y, 0);
+                if (start_y_tile) {
+                    start_y_tile->content = TC_Wall;
+                    start_y_tile->wall.type = WT_Steel;
+                    refresh_wall_visual(em, x, start_y, 0, true);
+                }
+
+                Tile* end_y_tile = find_tile_at(em, x, end_y - 1, 0);
+                if (end_y_tile) {
+                    end_y_tile->content = TC_Wall;
+                    end_y_tile->wall.type = WT_Steel;
+                    refresh_wall_visual(em, x, end_y - 1, 0, true);
+                }
+            }
+
+            for (int y = start_y; y < end_y; ++y) {
+                Tile* start_x_tile = find_tile_at(em, start_x, y, 0);
+                if (start_x_tile) {
+                    start_x_tile->content = TC_Wall;
+                    start_x_tile->wall.type = WT_Steel;
+                    refresh_wall_visual(em, start_x, y, 0, true);
+                }
+
+                Tile* end_x_tile = find_tile_at(em, end_x - 1, y, 0);
+                if (end_x_tile) {
+                    end_x_tile->content = TC_Wall;
+                    end_x_tile->wall.type = WT_Steel;
+                    refresh_wall_visual(em, end_x - 1, y, 0, true);
+                }
+            }
+
+        } break;
+        }
+    }
+
+    if (controller->mode == CM_Set_Wall && was_mouse_button_released(MOUSE_RIGHT)) {
+        Tile* tile = find_tile_at(em, (int)mouse_pos_in_world.x, (int)mouse_pos_in_world.y, 0);
+        if (tile && tile->content == TC_Wall) {
+            tile->content = TC_None;
+            refresh_wall_visual(em, (int)mouse_pos_in_world.x, (int)mouse_pos_in_world.y, 0, true);
         }
     }
 }
@@ -618,6 +773,7 @@ DLL_EXPORT void tick_game(f32 dt) {
 
             Rect viewport_in_world_space = get_viewport_in_world_space(controller);
             
+            // Draw tile in a single batch
             imm_begin();
             for (int i = 0; i < em->chunk_count; ++i) {
                 Chunk* chunk = &em->chunks[i];
@@ -638,6 +794,7 @@ DLL_EXPORT void tick_game(f32 dt) {
                         Rect trect = { tmin, tmax };
                         f32 tile_z = -5.f;
 
+                        if (tile->content == TC_Wall) continue;
                         if (!rect_overlaps_rect(viewport_in_world_space, trect, 0)) continue;
 
                         int sprites_per_row = terrain->width / PIXELS_PER_METER;
@@ -651,8 +808,10 @@ DLL_EXPORT void tick_game(f32 dt) {
                         Vector2 uv0 = v2_add(v2(sprite_x * PIXELS_PER_METER / map_width, sprite_y * PIXELS_PER_METER / map_width), uv_offset);
                         Vector2 uv1 = v2_sub(v2_add(uv0, v2s(texel_size * PIXELS_PER_METER)), uv_offset);
 
+
                         switch (controller->mode) {
                         case CM_Normal: 
+                        case CM_Set_Wall:
                             if (tile->type != TT_Open) imm_textured_rect(trect, tile_z, uv0, uv1, v4s(1.f));
                             break;
                         case CM_Set_Tile:
@@ -666,12 +825,54 @@ DLL_EXPORT void tick_game(f32 dt) {
             }
             imm_flush();
 
+            Texture2d* walls = find_texture2d(from_cstr("assets/sprites/walls"));
+            set_uniform_texture("diffuse", *walls);
+            imm_begin();
+            for (int i = 0; i < em->chunk_count; ++i) {
+                Chunk* chunk = &em->chunks[i];
+                
+                Vector2 min = v2((f32)chunk->x * CHUNK_SIZE, (f32)chunk->y * CHUNK_SIZE);
+                Vector2 max = v2_add(min, v2(CHUNK_SIZE, CHUNK_SIZE));
+                Rect chunk_rect = { min, max };
+
+                if (!rect_overlaps_rect(viewport_in_world_space, chunk_rect, 0)) continue;
+
+                Vector2 pos = v2((f32)(chunk->x * CHUNK_SIZE), (f32)(chunk->y * CHUNK_SIZE));
+                for (int x = 0; x < CHUNK_SIZE; ++x) {
+                    for (int y = 0; y < CHUNK_SIZE; ++y) {
+                        Tile* tile = &chunk->tiles[x + y * CHUNK_SIZE];
+
+                        Vector2 tmin = v2_add(pos, v2((f32)x, (f32)y));
+                        Vector2 tmax = v2_add(tmin, v2s(1.f));
+                        Rect trect = { tmin, tmax };
+                        f32 wall_z = -4.f;
+
+                        if (tile->content != TC_Wall) continue;
+                        if (!rect_overlaps_rect(viewport_in_world_space, trect, 0)) continue;
+
+                        int sprite_y = 0;
+                        int sprite_x = tile->wall.visual;
+
+                        f32 map_width = (f32)walls->width;
+                        f32 texel_size = 1.f / map_width;
+                        Vector2 uv_offset = v2s(texel_size / 4.f);
+
+                        Vector2 uv0 = v2_add(v2(sprite_x * PIXELS_PER_METER / map_width, sprite_y * PIXELS_PER_METER / map_width), uv_offset);
+                        Vector2 uv1 = v2_sub(v2_add(uv0, v2s(texel_size * PIXELS_PER_METER)), uv_offset);
+
+                        imm_textured_rect(trect, wall_z, uv0, uv1, v4s(1.f)); 
+                    }
+                }
+            }
+            imm_flush();
+
+            Vector2 mouse_in_world = get_mouse_pos_in_world_space(controller);
+            Rect selection = { v2_floor(mouse_in_world), v2_add(v2_floor(mouse_in_world), v2s(1.f)) };
+            Vector4 selection_color = color_from_hex(0x5ecf4466);
+            f32 selection_z = -2.f;
+
             switch (controller->mode) {
             case CM_Set_Tile: {
-                Vector2 mouse_in_world = get_mouse_pos_in_world_space(controller);
-                Rect selection = { v2_floor(mouse_in_world), v2_add(v2_floor(mouse_in_world), v2s(1.f)) };
-                Vector4 selection_color = color_from_hex(0x5ecf4466);
-                f32 selection_z = -2.f;
                 if (controller->selection.valid) {
                     selection = rect_from_points(controller->selection.start, controller->selection.current);
                     selection.min = v2_floor(selection.min);
@@ -680,6 +881,20 @@ DLL_EXPORT void tick_game(f32 dt) {
                 imm_begin();
                 imm_rect(selection, selection_z, selection_color);
                 imm_flush();
+            } break;
+            case CM_Set_Wall: {
+                if (controller->selection.valid) {
+                    selection = rect_from_points(controller->selection.start, controller->selection.current);
+                    selection.min = v2_floor(selection.min);
+                    selection.max = v2_add(v2_floor(selection.max), v2s(1.f));
+                    imm_begin();
+                    imm_border_rect(selection, selection_z, 1.f, selection_color);
+                    imm_flush();
+                } else {
+                    imm_begin();
+                    imm_rect(selection, selection_z, selection_color);
+                    imm_flush();
+                }
             } break;
             }
 
