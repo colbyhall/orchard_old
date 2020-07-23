@@ -21,6 +21,7 @@ typedef struct Draw_State {
     Matrix4 model_matrix;
 
     int num_draw_calls;
+    int vertices_drawn;
 
     b32 is_initialized;
 } Draw_State;
@@ -320,6 +321,7 @@ void imm_flush(void) {
     glDrawArrays(GL_TRIANGLES, 0, imm_renderer->vertex_count);
 
     draw_state->num_draw_calls += 1;
+    draw_state->vertices_drawn += imm_renderer->vertex_count;
 }
 
 void set_imm_vertex_format(void) {

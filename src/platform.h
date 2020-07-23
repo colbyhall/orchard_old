@@ -159,4 +159,12 @@ inline b32 read_file_into_string(String path, String* string, Allocator allocato
     return true;
 }
 
+inline b32 is_key_pressed(u8 key) { return g_platform->input.state.keys_down[key]; }
+inline b32 was_key_pressed(u8 key) { return g_platform->input.state.keys_down[key] && !g_platform->input.prev_state.keys_down[key]; }
+inline b32 was_key_released(u8 key) { return !g_platform->input.state.keys_down[key] && g_platform->input.prev_state.keys_down[key]; }
+
+inline b32 is_mouse_button_pressed(u8 mouse_button) { return g_platform->input.state.mouse_buttons_down[mouse_button]; }
+inline b32 was_mouse_button_pressed(u8 mouse_button) { return g_platform->input.state.mouse_buttons_down[mouse_button] && !g_platform->input.prev_state.mouse_buttons_down[mouse_button]; }
+inline b32 was_mouse_button_released(u8 mouse_button) { return !g_platform->input.state.mouse_buttons_down[mouse_button] && g_platform->input.prev_state.mouse_buttons_down[mouse_button]; }
+
 #endif /* PLATFORM_H */

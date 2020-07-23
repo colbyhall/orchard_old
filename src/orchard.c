@@ -137,25 +137,15 @@ u64 hash_string(void* a, void* b, int size) {
 }
 
 typedef enum Tile_Type {
-    TT_Air = 0,
-    TT_Grass,
-    TT_Dirt,
-    TT_Gravel,
-    TT_Stone,
-    TT_Sand,
-    TT_Water,
+    TT_Open = 0,
+    TT_Steel,
 
     TT_Count,
 } Tile_Type;
 
 static const char* tile_type_names[] = {
-    "Air",
-    "Grass",
-    "Dirt",
-    "Gravel",
-    "Stone",
-    "Sand",
-    "Water",
+    "Open",
+    "Steel",
 };
 
 typedef struct Tile {
@@ -171,7 +161,7 @@ typedef struct Chunk {
 typedef u32 Entity_Id; // Invalid Entity_Id is 0
 
 typedef enum Entity_Type {
-    ET_Camera,
+    ET_Controller,
     ET_Pawn,
 } Entity_Type;
 
@@ -207,7 +197,7 @@ typedef struct Entity_Manager {
     Entity* entities[ENTITY_CAP];
     Entity_Id last_entity_id;
 
-    Entity_Id camera_id;
+    Entity_Id controller_id;
 
     Allocator entity_memory;
 } Entity_Manager;
@@ -328,63 +318,107 @@ static void* _make_entity(Entity_Manager* em, int size, Entity_Type type) {
 }
 #define make_entity(em, type) _make_entity(em, sizeof(type), ET_ ## type)
 
-typedef struct Camera {
+typedef enum Controller_Mode {
+    CM_Normal,
+    CM_Set_Tile,
+} Controller_Mode;
+
+typedef struct Controller_Selection {
+    b32 valid;
+    Vector2 start;
+    Vector2 current;
+} Controller_Selection;
+
+#define MAX_CAMERA_ORTHO_SIZE 40.f
+#define MIN_CAMERA_ORTHO_SIZE 5.f
+typedef struct Controller {
     DEFINE_CHILD_ENTITY;
     f32 current_ortho_size;
     f32 target_ortho_size;
 
+    Controller_Mode mode;
+    union {
+        Controller_Selection selection;
+    };
+} Controller;
 
-} Camera;
-
-static Vector2 get_mouse_pos_in_world_space(Camera* camera) {
-    f32 ratio = (camera->current_ortho_size * 2.f) / (f32)g_platform->window_height;
+static Vector2 get_mouse_pos_in_world_space(Controller* controller) {
+    f32 ratio = (controller->current_ortho_size * 2.f) / (f32)g_platform->window_height;
     int adjusted_x = g_platform->input.state.mouse_x - g_platform->window_width / 2;
     int adjusted_y = g_platform->input.state.mouse_y - g_platform->window_height / 2;
-    return v2_add(v2_mul(v2((f32)adjusted_x, (f32)adjusted_y), v2s(ratio)), camera->location);
+    return v2_add(v2_mul(v2((f32)adjusted_x, (f32)adjusted_y), v2s(ratio)), controller->location);
 }
 
-static void set_camera(Entity_Manager* em, Camera* camera) {
-    if (camera) {
-        em->camera_id = camera->id;
+static void set_controller(Entity_Manager* em, Controller* controller) {
+    if (controller) {
+        em->controller_id = controller->id;
         return;
     }
-    em->camera_id = 0;
+    em->controller_id = 0;
 }
 
-static Rect get_viewport_in_world_space(Camera* camera) {
-    if (!camera) return rect_from_raw(0.f, 0.f, 0.f, 0.f);
+static Rect get_viewport_in_world_space(Controller* controller) {
+    if (!controller) return rect_from_raw(0.f, 0.f, 0.f, 0.f);
     
-    f32 ratio = (camera->current_ortho_size * 2.f) / (f32)g_platform->window_height;
+    f32 ratio = (controller->current_ortho_size * 2.f) / (f32)g_platform->window_height;
     f32 adjusted_width = (f32)g_platform->window_width * ratio;
     f32 adjusted_height = (f32)g_platform->window_height * ratio;
 
-    return rect_from_pos(camera->location, v2(adjusted_width, adjusted_height));
+    return rect_from_pos(controller->location, v2(adjusted_width, adjusted_height));
 }
 
-static void tick_camera(Entity_Manager* em, Entity* entity, f32 dt) {
-    assert(entity->type == ET_Camera);
-    Camera* camera = entity->derived;
+static void tick_controller(Entity_Manager* em, Entity* entity, f32 dt) {
+    assert(entity->type == ET_Controller);
+    Controller* controller = entity->derived;
 
     f32 mouse_wheel_delta = (f32)g_platform->input.state.mouse_wheel_delta / 50.f;
-    camera->target_ortho_size -= mouse_wheel_delta;
-    camera->target_ortho_size = CLAMP(camera->target_ortho_size, 5.f, 50.f);
+    controller->target_ortho_size -= mouse_wheel_delta;
+    controller->target_ortho_size = CLAMP(controller->target_ortho_size, MIN_CAMERA_ORTHO_SIZE, MAX_CAMERA_ORTHO_SIZE);
 
-    Vector2 old_mouse_pos_in_world = get_mouse_pos_in_world_space(camera);
+    Vector2 old_mouse_pos_in_world = get_mouse_pos_in_world_space(controller);
 
-    f32 old_ortho_size = camera->current_ortho_size;
-    camera->current_ortho_size = lerpf(camera->current_ortho_size, camera->target_ortho_size, dt * 5.f);
-    f32 delta_ortho_size = camera->current_ortho_size - old_ortho_size;
+    f32 old_ortho_size = controller->current_ortho_size;
+    controller->current_ortho_size = lerpf(controller->current_ortho_size, controller->target_ortho_size, dt * 5.f);
+    f32 delta_ortho_size = controller->current_ortho_size - old_ortho_size;
 
-    Vector2 delta_mouse_pos_in_world = v2_sub(old_mouse_pos_in_world, get_mouse_pos_in_world_space(camera));
-    if (delta_ortho_size != 0.f) camera->location = v2_add(camera->location, delta_mouse_pos_in_world);
+    Vector2 mouse_pos_in_world = get_mouse_pos_in_world_space(controller);
+    Vector2 delta_mouse_pos_in_world = v2_sub(old_mouse_pos_in_world, mouse_pos_in_world);
+    if (delta_ortho_size != 0.f) controller->location = v2_add(controller->location, delta_mouse_pos_in_world);
 
-    f32 ratio = (camera->current_ortho_size * 2.f) / (f32)g_platform->window_height;
+    f32 ratio = (controller->current_ortho_size * 2.f) / (f32)g_platform->window_height;
 
     if (g_platform->input.state.mouse_buttons_down[MOUSE_MIDDLE]) {
         Vector2 mouse_delta = v2((f32)g_platform->input.state.mouse_dx, (f32)g_platform->input.state.mouse_dy);
         f32 speed = ratio;
 
-        camera->location = v2_add(camera->location, v2_mul(v2_inverse(mouse_delta), v2s(speed)));
+        controller->location = v2_add(controller->location, v2_mul(v2_inverse(mouse_delta), v2s(speed)));
+    }
+
+    if (was_key_pressed(KEY_F1)) controller->mode = !controller->mode;
+
+    if (controller->mode == CM_Set_Tile) {
+        u8 selection_mouse_button = MOUSE_LEFT;
+
+        controller->selection.valid = is_mouse_button_pressed(selection_mouse_button);
+        if (controller->selection.valid) {
+            if (was_mouse_button_pressed(selection_mouse_button)) controller->selection.start = mouse_pos_in_world;
+            controller->selection.current = mouse_pos_in_world;
+        }
+
+        if (was_mouse_button_released(selection_mouse_button)) {
+            Rect selection = rect_from_points(controller->selection.start, controller->selection.current);
+
+            int start_x = (int)selection.min.x;
+            int start_y = (int)selection.min.y;
+            int end_x = (int)selection.max.x + 1;
+            int end_y = (int)selection.max.y + 1;
+            for (int x = start_x; x < end_x; ++x) {
+                for (int y = start_y; y < end_y; ++y) {
+                    Tile* tile = find_tile_at(em, x, y, 0);
+                    if (tile) tile->type = TT_Steel;
+                }
+            }
+        }
     }
 }
 
@@ -427,9 +461,9 @@ static void tick_pawn(Entity_Manager* em, Entity* entity, f32 dt) {
 static void draw_pawn(Entity_Manager* em, Entity* entity) {
     set_shader(find_shader(from_cstr("assets/shaders/basic2d")));
 
-    Camera* camera = find_entity(em, em->camera_id);
+    Controller* controller = find_entity(em, em->controller_id);
 
-    Rect viewport_in_world_space = get_viewport_in_world_space(camera);
+    Rect viewport_in_world_space = get_viewport_in_world_space(controller);
     Rect draw_rect = move_rect(entity->bounds, entity->location);
 
     if (!rect_overlaps_rect(draw_rect, viewport_in_world_space, 0)) return;
@@ -440,7 +474,7 @@ static void draw_pawn(Entity_Manager* em, Entity* entity) {
 }
 
 #define ENTITY_FUNCTIONS(entry) \
-entry(ET_Camera, tick_camera, draw_null) \
+entry(ET_Controller, tick_controller, draw_null) \
 entry(ET_Pawn, tick_pawn, draw_pawn) 
 
 static Pawn* make_pawn(Entity_Manager* em, Vector2 location, Vector2 target_location) {
@@ -451,8 +485,8 @@ static Pawn* make_pawn(Entity_Manager* em, Vector2 location, Vector2 target_loca
     return result;
 }
 
-static Camera* make_camera(Entity_Manager* em, Vector2 location, f32 ortho_size) {
-    Camera* result = make_entity(em, Camera);
+static Controller* make_controller(Entity_Manager* em, Vector2 location, f32 ortho_size) {
+    Controller* result = make_entity(em, Controller);
     result->location = location;
     result->current_ortho_size = ortho_size;
     result->target_ortho_size  = ortho_size;
@@ -473,39 +507,22 @@ static void regen_map(Entity_Manager* em, Random_Seed seed) {
             chunk->y = y;
             chunk->z = 0;
 
-            for (int jx = 0; jx < CHUNK_SIZE; ++jx) {
-                for (int jy = 0; jy < CHUNK_SIZE; ++jy) {
-                    Tile* tile = &chunk->tiles[jx + jy * CHUNK_SIZE];
-
-                    f32 final_x = (f32)(x * CHUNK_SIZE) + (f32)jx;
-                    f32 final_y = (f32)(y * CHUNK_SIZE) + (f32)jy;
-                    f32 noise   = perlin_get_2d(seed, final_x, final_y, 0.1f, 4);
-
-                    tile->type = (noise > 0.65f) + 1;
-                }
-            }
+            for (int i = 0; i < CHUNK_SIZE * CHUNK_SIZE; ++i) chunk->tiles[i].type = TT_Open;
         }
     }
 
-    Camera* camera = make_camera(em, v2z(), 5.f);
-    set_camera(em, camera);
-
-    for (int i = 0; i < 64; ++i) {
-        f32 max = (f32)(chunk_cap_sq * CHUNK_SIZE);
-
-        f32 start_x = random_f32_in_range(&seed, 0.f, max);
-        f32 start_y = random_f32_in_range(&seed, 0.f, max);
-
-        f32 target_x = random_f32_in_range(&seed, 0.f, max);
-        f32 target_y = random_f32_in_range(&seed, 0.f, max);
-
-        o_log("[Game] Pawn %i is starting at (%f, %f) and will be moving toward (%f, %f)", i + 1, start_x, start_y, target_x, target_y);
-        make_pawn(em, v2(start_x, start_y), v2(target_x, target_y));
-    }
+    Controller* controller = make_controller(em, v2s((f32)chunk_cap_sq * CHUNK_SIZE / 2.f), MAX_CAMERA_ORTHO_SIZE);
+    set_controller(em, controller);
 }
+
+#define PIXELS_PER_METER 32
 
 typedef struct Game_State {
     Entity_Manager* entity_manager;
+
+    int fps;
+    int frame_count;
+    f32 frame_accum;
 
     b32 is_initialized;
 } Game_State;
@@ -537,6 +554,14 @@ DLL_EXPORT void init_game(Platform* platform) {
 }
 
 DLL_EXPORT void tick_game(f32 dt) {
+    game_state->frame_accum += dt;
+    if (game_state->frame_accum >= 1.f) {
+        game_state->fps = game_state->frame_count;
+        game_state->frame_accum = 0.f;
+        game_state->frame_count = 0;
+    }
+    game_state->frame_count += 1;
+
     // Do input handling
     for (int i = 0; i < g_platform->num_events; ++i) {
         OS_Event event = g_platform->events[i];
@@ -549,7 +574,9 @@ DLL_EXPORT void tick_game(f32 dt) {
     }
 
     Entity_Manager* em = game_state->entity_manager;
+    Rect viewport = { v2z(), v2((f32)g_platform->window_width, (f32)g_platform->window_height) };
 
+    f64 before_tick = g_platform->time_in_seconds();
     // Tick the game state
     {
         for (entity_iterator(em)) {
@@ -563,6 +590,7 @@ DLL_EXPORT void tick_game(f32 dt) {
             };
         }
     }
+    f64 tick_duration = g_platform->time_in_seconds() - before_tick;
 
     // Draw the game state
     f64 before_draw = g_platform->time_in_seconds();
@@ -571,15 +599,24 @@ DLL_EXPORT void tick_game(f32 dt) {
         clear_framebuffer(v3s(0.01f));
 
         draw_state->num_draw_calls = 0;
+        draw_state->vertices_drawn = 0;
 
-        Camera* camera = find_entity(em, em->camera_id);
-        if (camera) {
+        set_shader(find_shader(from_cstr("assets/shaders/basic2d")));
+        draw_right_handed(viewport);
+        set_uniform_texture("diffuse", *find_texture2d(from_cstr("assets/textures/background")));
+        imm_begin();
+        imm_textured_rect(viewport, -10.f, v2z(), v2s(1.f), v4s(1.f));
+        imm_flush();
+
+        Controller* controller = find_entity(em, em->controller_id);
+        if (controller) {
             // Draw the tilemap
             set_shader(find_shader(from_cstr("assets/shaders/basic2d")));
-            set_uniform_texture("diffuse", *find_texture2d(from_cstr("assets/sprites/terrain_map")));
-            draw_from(camera->location, camera->current_ortho_size);
+            Texture2d* terrain = find_texture2d(from_cstr("assets/sprites/terrain_map"));
+            set_uniform_texture("diffuse", *terrain);
+            draw_from(controller->location, controller->current_ortho_size);
 
-            Rect viewport_in_world_space = get_viewport_in_world_space(camera);
+            Rect viewport_in_world_space = get_viewport_in_world_space(controller);
             
             imm_begin();
             for (int i = 0; i < em->chunk_count; ++i) {
@@ -598,30 +635,52 @@ DLL_EXPORT void tick_game(f32 dt) {
 
                         Vector2 tmin = v2_add(pos, v2((f32)x, (f32)y));
                         Vector2 tmax = v2_add(tmin, v2s(1.f));
+                        Rect trect = { tmin, tmax };
+                        f32 tile_z = -5.f;
 
-                        f32 texel_size = 1.f / 512.f;
-                        f32 quater_texel_size = texel_size / 4.f;
+                        if (!rect_overlaps_rect(viewport_in_world_space, trect, 0)) continue;
 
-                        f32 tile_size = 32;
-                        Vector2 uv0 = v2_add(tile->type == TT_Grass ? v2z() : v2(tile_size / 512.f, 0.f), v2s(quater_texel_size));
-                        Vector2 uv1 = v2_sub(tile->type == TT_Grass ? v2s(tile_size / 512.f) : v2((tile_size / 512.f) * 2.f, tile_size / 512.f), v2s(quater_texel_size));
+                        int sprites_per_row = terrain->width / PIXELS_PER_METER;
+                        int sprite_y = tile->type / sprites_per_row;
+                        int sprite_x = tile->type - sprite_y * sprites_per_row;
 
-                        Rect rect = { tmin, tmax };
-                        imm_textured_rect(rect, -5.f - (f32)chunk->z, uv0, uv1, v4s(1.f));
+                        f32 map_width = (f32)terrain->width;
+                        f32 texel_size = 1.f / map_width;
+                        Vector2 uv_offset = v2s(texel_size / 4.f);
+
+                        Vector2 uv0 = v2_add(v2(sprite_x * PIXELS_PER_METER / map_width, sprite_y * PIXELS_PER_METER / map_width), uv_offset);
+                        Vector2 uv1 = v2_sub(v2_add(uv0, v2s(texel_size * PIXELS_PER_METER)), uv_offset);
+
+                        switch (controller->mode) {
+                        case CM_Normal: 
+                            if (tile->type != TT_Open) imm_textured_rect(trect, tile_z, uv0, uv1, v4s(1.f));
+                            break;
+                        case CM_Set_Tile:
+                            imm_textured_rect(trect, tile_z, uv0, uv1, v4s(1.f)); 
+                            break;
+                        default: invalid_code_path;
+                        }
+
                     }
                 }
             }
             imm_flush();
 
-            Vector2 mouse_location = get_mouse_pos_in_world_space(camera);
-            Tile* tile_under_mouse = find_tile_at(em, (int)mouse_location.x, (int)mouse_location.y, 0);
-            if (tile_under_mouse) {
-                Vector2 min = v2_floor(mouse_location);
-                Rect hovered_tile_draw = { min, v2_add(min, v2s(1.f)) };
+            switch (controller->mode) {
+            case CM_Set_Tile: {
+                Vector2 mouse_in_world = get_mouse_pos_in_world_space(controller);
+                Rect selection = { v2_floor(mouse_in_world), v2_add(v2_floor(mouse_in_world), v2s(1.f)) };
+                Vector4 selection_color = color_from_hex(0x5ecf4466);
+                f32 selection_z = -2.f;
+                if (controller->selection.valid) {
+                    selection = rect_from_points(controller->selection.start, controller->selection.current);
+                    selection.min = v2_floor(selection.min);
+                    selection.max = v2_add(v2_floor(selection.max), v2s(1.f));
+                }
                 imm_begin();
-                imm_rect(hovered_tile_draw, -5.f, v4(1.f, 1.f, 1.f, 0.2f));
-                imm_border_rect(hovered_tile_draw, -5.f, 0.05f, v4s(1.f));
+                imm_rect(selection, selection_z, selection_color);
                 imm_flush();
+            } break;
             }
 
             for (entity_iterator(em)) {
@@ -639,7 +698,6 @@ DLL_EXPORT void tick_game(f32 dt) {
     f64 draw_duration = g_platform->time_in_seconds() - before_draw;
 
     {
-        Rect viewport = { v2z(), v2((f32)g_platform->window_width, (f32)g_platform->window_height) };
         set_shader(find_shader(from_cstr("assets/shaders/font")));
         draw_right_handed(viewport);
 
@@ -647,23 +705,23 @@ DLL_EXPORT void tick_game(f32 dt) {
         Font* font = font_at_size(fc, 48);
         set_uniform_texture("atlas", font->atlas);
 
-        char camera_debug_string[256];
-        Camera* camera = find_entity(em, em->camera_id);
-        if (camera) {
-            Vector2 mouse_location = get_mouse_pos_in_world_space(camera);
+        char controller_debug_string[256];
+        Controller* controller = find_entity(em, em->controller_id);
+        if (controller) {
+            Vector2 mouse_location = get_mouse_pos_in_world_space(controller);
             Tile* tile_under_mouse = find_tile_at(em, (int)mouse_location.x, (int)mouse_location.y, 0);
 
             if (tile_under_mouse) {
                 const char* type_string = tile_type_names[tile_under_mouse->type];
                 sprintf(
-                    camera_debug_string, 
+                    controller_debug_string, 
                     "%s (%i, %i)", 
                     type_string, 
                     (int)mouse_location.x, 
                     (int)mouse_location.y
                 );
             }
-            else sprintf(camera_debug_string, "None");
+            else sprintf(controller_debug_string, "None");
         }
 
         f64 precise_dt = g_platform->current_frame_time - g_platform->last_frame_time;
@@ -671,11 +729,14 @@ DLL_EXPORT void tick_game(f32 dt) {
         char buffer[512];
         sprintf(
             buffer, 
-            "Frame Time: %ims\nDraw Time: %ims\nDraw Calls: %i\nTile: %s", 
+            "FPS: %i\nFrame Time: %ims\n  Tick Time: %ims\n  Draw Time: %ims\n  Draw Calls: %i\nVertices Drawn: %i\nTile: %s", 
+            game_state->fps,
             (int)(precise_dt * 1000.0),
+            (int)(tick_duration * 1000.0),
             (int)(draw_duration * 1000.0),
             draw_state->num_draw_calls,
-            camera != 0 ? camera_debug_string : "None"
+            draw_state->vertices_drawn,
+            controller != 0 ? controller_debug_string : "None"
         );
 
         imm_begin();

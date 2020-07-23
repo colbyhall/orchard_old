@@ -168,10 +168,11 @@ typedef struct Asset_Type_Extension {
 } Asset_Type_Extension;
 
 static Asset_Type_Extension asset_type_extensions[] = {
-    { AT_Shader,    "glsl" },
+    { AT_Shader,    "glsl"},
     { AT_Texture2d, "png" },
     { AT_Texture2d, "jpg" },
-    { AT_Texture2d, "jpeg" },
+    { AT_Texture2d, "jpeg"},
+    { AT_Texture2d, "psd" },
     { AT_Texture2d, "bmp" },
     { AT_Mesh,      "obj" },
     { AT_Font_Collection, "ttf" },

@@ -175,6 +175,12 @@ inline Rect rect_from_pos(Vector2 pos, Vector2 size) {
     Vector2 max = v2_add(pos, half_size);
     return (Rect) { min, max };
 }
+inline Rect rect_from_points(Vector2 p0, Vector2 p1) { 
+    return (Rect) { 
+        v2(MIN(p0.x, p1.x), MIN(p0.y, p1.y)), 
+        v2(MAX(p0.x, p1.x), MAX(p0.y, p1.y)),
+    };
+}
 inline Vector2 rect_size(Rect a) { return v2_sub(a.max, a.min); }
 
 b32 rect_overlaps_rect(Rect a, Rect b, Rect* overlap);
