@@ -1,0 +1,43 @@
+Space Station 13 meets Rim World
+
+Most of this will be cut
+
+Randomly generated solar system
+    * Stars
+        - Size
+        - Type
+        - Age
+        - Dyson Spheres?
+    * Planets, Planets
+        - Controlled by star.
+        - Most non life sustaining
+        - Colonies
+        - Companies
+    * Asteroids
+        - Resources
+        - Mining Colonies
+    * Ships, Space Stations
+        - Pirates, Governments
+        - Unique style with every seed
+    * Culture, History
+
+Multiple story tellers
+    * Possibly called AI's
+    * Multiple Intros (Primary is Space Station with crew)
+
+Easy mod support. C and LUA?
+
+Systems
+    * Electricity
+        - Tiers of electricity generation
+    * Gravity
+        - Tiers of artifical gravity
+    * Hull Breaches
+        - Lock off zones when a hull is breached
+    * Resource Gathering
+        - Astroid Mining
+    * Medical Research
+    * Chemical Research
+    * Botany
+    * Genetic Research
+    * Job Management

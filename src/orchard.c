@@ -24,6 +24,9 @@
 #include "opengl.c"
 #include "draw.c"
 #include "asset.c"
+#include "entity_manager.c"
+#include "controller.c"
+#include "pawn.c"
 
 Platform* g_platform = 0;
 
@@ -135,521 +138,6 @@ u64 hash_string(void* a, void* b, int size) {
 
     return fnv1_hash(s_a->data, s_a->len);
 }
-
-typedef enum Wall_Type {
-    WT_Steel = 0,
-} Wall_Type;
-
-typedef enum Wall_Visual {
-    WV_North,
-    WV_South,
-    WV_East,
-    WV_West,
-    WV_South_East,
-    WV_South_West,
-    WV_East_West,
-    WV_Cross,
-
-    WV_Count,
-} Wall_Visual;
-
-typedef struct Wall {
-    Wall_Type type;
-    Wall_Visual visual;
-} Wall;
-
-typedef enum Tile_Type {
-    TT_Open = 0,
-    TT_Steel,
-} Tile_Type;
-
-static const char* tile_type_names[] = {
-    "Open",
-    "Steel",
-};
-
-typedef enum Tile_Content {
-    TC_None = 0,
-    TC_Wall
-} Tile_Content;
-
-typedef struct Tile {
-    Tile_Type type;
-    Tile_Content content;
-    union {
-        Wall wall;
-    };
-} Tile;
-
-#define CHUNK_SIZE 16
-typedef struct Chunk {
-    int x, y, z;
-    Tile* tiles; // Allocated elsewhere because we scan chunks for their pos in a list
-} Chunk;
-
-typedef u32 Entity_Id; // Invalid Entity_Id is 0
-
-typedef enum Entity_Type {
-    ET_Controller,
-    ET_Pawn,
-} Entity_Type;
-
-#define ENTITY_STRUCT(entry) \
-entry(Entity_Id, id) \
-entry(Entity_Type, type) \
-entry(Vector2, location) \
-entry(f32, rotation) \
-entry(Rect, bounds) \
-entry(void*, derived)
-
-#define DEFINE_ENTITY_STRUCT(t, n) t n;
-
-typedef struct Entity {
-    ENTITY_STRUCT(DEFINE_ENTITY_STRUCT)
-} Entity;
-
-#define DEFINE_CHILD_ENTITY union { \
-    struct { \
-        ENTITY_STRUCT(DEFINE_ENTITY_STRUCT) \
-    }; \
-    Entity base; \
-}
-
-#define CHUNK_CAP 256
-#define ENTITY_CAP (CHUNK_SIZE * CHUNK_SIZE * CHUNK_CAP)
-typedef struct Entity_Manager {
-    int chunk_count;
-    Chunk chunks[CHUNK_CAP];
-    Allocator tile_memory;
-
-    int entity_count;
-    Entity* entities[ENTITY_CAP];
-    Entity_Id last_entity_id;
-
-    Entity_Id controller_id;
-
-    Allocator entity_memory;
-} Entity_Manager;
-
-typedef struct Entity_Iterator {
-    Entity_Manager* manager;
-    int found_entity_count;
-    int index;
-} Entity_Iterator;
-
-static Entity_Iterator make_entity_iterator(Entity_Manager* manager) {
-    for (int i = 0; i < ENTITY_CAP; ++i) {
-        Entity* e = manager->entities[i];
-
-        if (!e) continue;
-
-        return (Entity_Iterator) { manager, 0, i };
-    }
-
-    return (Entity_Iterator) { 0 };
-}
-
-static b32 can_step_entity_iterator(Entity_Iterator iter) {
-    return (
-        iter.manager != 0 && 
-        iter.index < iter.manager->entity_count && 
-        iter.found_entity_count < iter.manager->entity_count
-    );
-}
-
-static void step_entity_iterator(Entity_Iterator* iter) {
-    iter->found_entity_count++;
-    if (iter->found_entity_count == iter->manager->entity_count) return;
-
-    for (int i = iter->index + 1; i < ENTITY_CAP; ++i) {
-        Entity* e = iter->manager->entities[i];
-
-        if (!e) continue;
-
-        iter->index = i;
-        break;
-    }
-}
-
-#define entity_iterator(em) Entity_Iterator iter = make_entity_iterator(em); can_step_entity_iterator(iter); step_entity_iterator(&iter)
-
-static Entity* entity_from_iterator(Entity_Iterator iter) {
-    return iter.manager->entities[iter.index];
-}
-
-static void* find_entity(Entity_Manager* em, Entity_Id id) {
-    for (entity_iterator(em)) {
-        Entity* entity = entity_from_iterator(iter);
-
-        if (entity->id == id) return entity->derived;
-    }
-
-    return 0;
-}
-
-static Tile* find_tile_at(Entity_Manager* em, int x, int y, int z) {
-    int chunk_x = x / CHUNK_SIZE;
-    int chunk_y = y / CHUNK_SIZE;
-
-    if (x < 0 ||  y < 0) return 0;
-
-    for (int i = 0; i < em->chunk_count; ++i) {
-        Chunk chunk = em->chunks[i];
-        if (chunk.x == chunk_x && chunk.y == chunk_y && chunk.z == z) {
-            int local_x = x - chunk_x * CHUNK_SIZE;
-            int local_y = y - chunk_y * CHUNK_SIZE;
-            assert(local_x <= CHUNK_SIZE && local_y <= CHUNK_SIZE);
-            return &chunk.tiles[local_x + local_y * CHUNK_SIZE];
-        }
-    }
-
-    return 0;
-}
-
-static Entity_Manager* make_entity_manager(Allocator allocator) {
-    Entity_Manager* result = mem_alloc_struct(allocator, Entity_Manager);
-
-    result->tile_memory = allocator;
-    result->chunk_count = CHUNK_CAP;
-
-    for (int i = 0; i < result->chunk_count; ++i) {
-        Chunk* chunk = &result->chunks[i];
-
-        chunk->tiles = mem_alloc_array(allocator, Tile, CHUNK_SIZE * CHUNK_SIZE);
-    }
-
-    result->entity_memory = pool_allocator(allocator, ENTITY_CAP + ENTITY_CAP / 2, 256);
-
-    return result;
-}
-
-static void* _make_entity(Entity_Manager* em, int size, Entity_Type type) {
-    assert(sizeof(Entity) < size);
-    assert(em->entity_count < ENTITY_CAP);
-
-    Entity* result = mem_alloc(em->entity_memory, size);
-    *result = (Entity) { 0 };
-
-    result->derived = result;
-    result->id = ++em->last_entity_id;
-    result->type = type;
-
-    for (int i = 0; i < ENTITY_CAP; ++i) {
-        Entity** entity = &em->entities[i];
-        if (!(*entity)) {
-            *entity = result;
-            em->entity_count++;
-            break;
-        }
-    }
-
-    return result;
-}
-#define make_entity(em, type) _make_entity(em, sizeof(type), ET_ ## type)
-
-static void refresh_wall_visual(Entity_Manager* em, int x, int y, int z, b32 first) {
-    Tile* tile = find_tile_at(em, x, y, z);
-    if (!tile) return;
-    if (tile->content != TC_Wall && !first) return;
-
-    b32 has_north = false;
-    Tile* north = find_tile_at(em, x, y + 1, z);
-    if (north && north->content == TC_Wall) {
-        if (first) refresh_wall_visual(em, x, y + 1, z, false);
-        has_north = true;
-    }
-
-    b32 has_south = false;
-    Tile* south = find_tile_at(em, x, y - 1, z);
-    if (south && south->content == TC_Wall) {
-        if (first) refresh_wall_visual(em, x, y - 1, z, false);
-        has_south = true;
-    }
-
-    b32 has_east = false;
-    Tile* east = find_tile_at(em, x + 1, y, z);
-    if (east && east->content == TC_Wall) {
-        if (first) refresh_wall_visual(em, x + 1, y, z, false);
-        has_east = true;
-    }
-
-    b32 has_west = false;
-    Tile* west = find_tile_at(em, x - 1, y, z);
-    if (west && west->content == TC_Wall) {
-        if (first) refresh_wall_visual(em, x - 1, y, z, false);
-        has_west = true;
-    }
-
-    if (tile->content != TC_Wall && first) return;
-
-    int num_surrounding = has_north + has_south + has_east + has_west;
-    switch (num_surrounding) {
-    case 0: 
-        tile->wall.visual = WV_South;
-        break;
-    case 1: {
-        Wall_Visual visual    = WV_South;
-        if (has_south) visual = WV_North;
-        if (has_east) visual  = WV_West;
-        if (has_west) visual  = WV_East;
-        tile->wall.visual = visual;
-    } break;
-    case 2: {
-        Wall_Visual visual = WV_South;
-        if (has_south && has_north) visual = WV_North;
-        if (has_east && has_west)   visual = WV_East_West;
-        if (has_east && has_north)  visual = WV_West;
-        if (has_west && has_north)  visual = WV_East;
-        if (has_east && has_south)  visual = WV_South_East;
-        if (has_west && has_south)  visual = WV_South_West;
-        tile->wall.visual = visual;
-    } break;
-    case 3: {
-        Wall_Visual visual = WV_Cross;
-        if (has_north && !has_south) visual = WV_East_West;
-        if (has_north && has_south && has_east) visual = WV_South_East;
-        if (has_north && has_south && has_west) visual = WV_South_West;
-        tile->wall.visual = visual;
-    } break;
-    case 4:
-        tile->wall.visual = WV_Cross;
-        break;
-    }
-}
-
-typedef enum Controller_Mode {
-    CM_Normal,
-    CM_Set_Tile,
-    CM_Set_Wall,
-} Controller_Mode;
-
-typedef struct Controller_Selection {
-    b32 valid;
-    Vector2 start;
-    Vector2 current;
-} Controller_Selection;
-
-#define MAX_CAMERA_ORTHO_SIZE 40.f
-#define MIN_CAMERA_ORTHO_SIZE 5.f
-typedef struct Controller {
-    DEFINE_CHILD_ENTITY;
-    f32 current_ortho_size;
-    f32 target_ortho_size;
-
-    Controller_Mode mode;
-    union {
-        Controller_Selection selection;
-    };
-} Controller;
-
-static Vector2 get_mouse_pos_in_world_space(Controller* controller) {
-    f32 ratio = (controller->current_ortho_size * 2.f) / (f32)g_platform->window_height;
-    int adjusted_x = g_platform->input.state.mouse_x - g_platform->window_width / 2;
-    int adjusted_y = g_platform->input.state.mouse_y - g_platform->window_height / 2;
-    return v2_add(v2_mul(v2((f32)adjusted_x, (f32)adjusted_y), v2s(ratio)), controller->location);
-}
-
-static void set_controller(Entity_Manager* em, Controller* controller) {
-    if (controller) {
-        em->controller_id = controller->id;
-        return;
-    }
-    em->controller_id = 0;
-}
-
-static Rect get_viewport_in_world_space(Controller* controller) {
-    if (!controller) return rect_from_raw(0.f, 0.f, 0.f, 0.f);
-    
-    f32 ratio = (controller->current_ortho_size * 2.f) / (f32)g_platform->window_height;
-    f32 adjusted_width = (f32)g_platform->window_width * ratio;
-    f32 adjusted_height = (f32)g_platform->window_height * ratio;
-
-    return rect_from_pos(controller->location, v2(adjusted_width, adjusted_height));
-}
-
-static void tick_controller(Entity_Manager* em, Entity* entity, f32 dt) {
-    assert(entity->type == ET_Controller);
-    Controller* controller = entity->derived;
-
-    f32 mouse_wheel_delta = (f32)g_platform->input.state.mouse_wheel_delta / 50.f;
-    controller->target_ortho_size -= mouse_wheel_delta;
-    controller->target_ortho_size = CLAMP(controller->target_ortho_size, MIN_CAMERA_ORTHO_SIZE, MAX_CAMERA_ORTHO_SIZE);
-
-    Vector2 old_mouse_pos_in_world = get_mouse_pos_in_world_space(controller);
-
-    f32 old_ortho_size = controller->current_ortho_size;
-    controller->current_ortho_size = lerpf(controller->current_ortho_size, controller->target_ortho_size, dt * 5.f);
-    f32 delta_ortho_size = controller->current_ortho_size - old_ortho_size;
-
-    Vector2 mouse_pos_in_world = get_mouse_pos_in_world_space(controller);
-    Vector2 delta_mouse_pos_in_world = v2_sub(old_mouse_pos_in_world, mouse_pos_in_world);
-    if (delta_ortho_size != 0.f) controller->location = v2_add(controller->location, delta_mouse_pos_in_world);
-
-    f32 ratio = (controller->current_ortho_size * 2.f) / (f32)g_platform->window_height;
-
-    if (g_platform->input.state.mouse_buttons_down[MOUSE_MIDDLE]) {
-        Vector2 mouse_delta = v2((f32)g_platform->input.state.mouse_dx, (f32)g_platform->input.state.mouse_dy);
-        f32 speed = ratio;
-
-        controller->location = v2_add(controller->location, v2_mul(v2_inverse(mouse_delta), v2s(speed)));
-    }
-
-    // Tile Mode
-    if (was_key_pressed(KEY_F1)) {
-        if (controller->mode == CM_Set_Tile) controller->mode = CM_Normal;
-        controller->mode = CM_Set_Tile;
-    }
-
-    // Wall Mode
-    if (was_key_pressed(KEY_F2)) {
-        if (controller->mode == CM_Set_Wall) controller->mode = CM_Normal;
-        controller->mode = CM_Set_Wall;
-    }
-
-    u8 selection_mouse_button = MOUSE_LEFT;
-
-    controller->selection.valid = is_mouse_button_pressed(selection_mouse_button);
-    if (controller->selection.valid) {
-        if (was_mouse_button_pressed(selection_mouse_button)) controller->selection.start = mouse_pos_in_world;
-        controller->selection.current = mouse_pos_in_world;
-    }
-
-    if (was_mouse_button_released(selection_mouse_button)) {
-        Rect selection = rect_from_points(controller->selection.start, controller->selection.current);
-
-        int start_x = (int)selection.min.x;
-        int start_y = (int)selection.min.y;
-        int end_x = (int)selection.max.x + 1;
-        int end_y = (int)selection.max.y + 1;
-
-        switch (controller->mode) {
-        case CM_Set_Tile: {
-            for (int x = start_x; x < end_x; ++x) {
-                for (int y = start_y; y < end_y; ++y) {
-                    Tile* tile = find_tile_at(em, x, y, 0);
-                    if (tile) tile->type = TT_Steel;
-                }
-            }
-        } break;
-        case CM_Set_Wall: {
-            for (int x = start_x; x < end_x; ++x) {
-                Tile* start_y_tile = find_tile_at(em, x, start_y, 0);
-                if (start_y_tile) {
-                    start_y_tile->content = TC_Wall;
-                    start_y_tile->wall.type = WT_Steel;
-                    refresh_wall_visual(em, x, start_y, 0, true);
-                }
-
-                Tile* end_y_tile = find_tile_at(em, x, end_y - 1, 0);
-                if (end_y_tile) {
-                    end_y_tile->content = TC_Wall;
-                    end_y_tile->wall.type = WT_Steel;
-                    refresh_wall_visual(em, x, end_y - 1, 0, true);
-                }
-            }
-
-            for (int y = start_y; y < end_y; ++y) {
-                Tile* start_x_tile = find_tile_at(em, start_x, y, 0);
-                if (start_x_tile) {
-                    start_x_tile->content = TC_Wall;
-                    start_x_tile->wall.type = WT_Steel;
-                    refresh_wall_visual(em, start_x, y, 0, true);
-                }
-
-                Tile* end_x_tile = find_tile_at(em, end_x - 1, y, 0);
-                if (end_x_tile) {
-                    end_x_tile->content = TC_Wall;
-                    end_x_tile->wall.type = WT_Steel;
-                    refresh_wall_visual(em, end_x - 1, y, 0, true);
-                }
-            }
-
-        } break;
-        }
-    }
-
-    if (controller->mode == CM_Set_Wall && was_mouse_button_released(MOUSE_RIGHT)) {
-        Tile* tile = find_tile_at(em, (int)mouse_pos_in_world.x, (int)mouse_pos_in_world.y, 0);
-        if (tile && tile->content == TC_Wall) {
-            tile->content = TC_None;
-            refresh_wall_visual(em, (int)mouse_pos_in_world.x, (int)mouse_pos_in_world.y, 0, true);
-        }
-    }
-}
-
-typedef struct Pawn {
-    DEFINE_CHILD_ENTITY;
-    Vector2 target_location;
-    f32 idle_time;
-} Pawn;
-
-static void tick_pawn(Entity_Manager* em, Entity* entity, f32 dt) {
-    assert(entity->type == ET_Pawn);
-
-    f32 max_speed = 3.f;
-    Pawn* pawn = entity->derived;
-
-    Random_Seed seed = init_seed((int)g_platform->time_in_seconds());
-
-    Vector2 to_point = v2_sub(pawn->target_location, pawn->location);
-    f32 to_point_len = v2_len(to_point);
-    if (to_point_len < 0.1f) {
-        pawn->idle_time += dt;
-        if (pawn->idle_time >= 3.f) {
-            pawn->idle_time = 0.f;
-
-            int chunk_cap_sq = (int)sqrt(CHUNK_CAP);
-            f32 max = (f32)(chunk_cap_sq * CHUNK_SIZE);
-
-            f32 x = random_f32_in_range(&seed, 0.f, max);
-            f32 y = random_f32_in_range(&seed, 0.f, max);
-            pawn->target_location = v2(x, y);
-
-            o_log("[Game] Pawn with id %lu will be moving toward (%f, %f)", pawn->id, pawn->target_location.x, pawn->target_location.y);
-        }
-    } else {
-        Vector2 to_point_norm = v2_div(to_point, v2s(to_point_len));
-        pawn->location = v2_add(pawn->location, v2_mul(to_point_norm, v2s(max_speed * dt)));
-    }
-}
-
-static void draw_pawn(Entity_Manager* em, Entity* entity) {
-    set_shader(find_shader(from_cstr("assets/shaders/basic2d")));
-
-    Controller* controller = find_entity(em, em->controller_id);
-
-    Rect viewport_in_world_space = get_viewport_in_world_space(controller);
-    Rect draw_rect = move_rect(entity->bounds, entity->location);
-
-    if (!rect_overlaps_rect(draw_rect, viewport_in_world_space, 0)) return;
-
-    imm_begin();
-    imm_rect(draw_rect, -4.f, v4(1.f, 0.f, 0.2f, 1.f));
-    imm_flush();
-}
-
-#define ENTITY_FUNCTIONS(entry) \
-entry(ET_Controller, tick_controller, draw_null) \
-entry(ET_Pawn, tick_pawn, draw_pawn) 
-
-static Pawn* make_pawn(Entity_Manager* em, Vector2 location, Vector2 target_location) {
-    Pawn* result = make_entity(em, Pawn);
-    result->bounds   = (Rect) { v2(-0.5f, 0.f), v2(0.5f, 2.f) };
-    result->location = location;
-    result->target_location = target_location;
-    return result;
-}
-
-static Controller* make_controller(Entity_Manager* em, Vector2 location, f32 ortho_size) {
-    Controller* result = make_entity(em, Controller);
-    result->location = location;
-    result->current_ortho_size = ortho_size;
-    result->target_ortho_size  = ortho_size;
-    return result;
-}
-
-static void tick_null(Entity_Manager* em, Entity* entity, f32 dt) { }
-static void draw_null(Entity_Manager* em, Entity* entity) { }
 
 static void regen_map(Entity_Manager* em, Random_Seed seed) {
     o_log("[Game] Generating map with seed %llu", seed.seed);
@@ -763,7 +251,7 @@ DLL_EXPORT void tick_game(f32 dt) {
         imm_textured_rect(viewport, -10.f, v2z(), v2s(1.f), v4s(1.f));
         imm_flush();
 
-        Controller* controller = find_entity(em, em->controller_id);
+        Controller* controller = find_entity_by_id(em, em->controller_id);
         if (controller) {
             // Draw the tilemap
             set_shader(find_shader(from_cstr("assets/shaders/basic2d")));
@@ -866,36 +354,25 @@ DLL_EXPORT void tick_game(f32 dt) {
             }
             imm_flush();
 
-            Vector2 mouse_in_world = get_mouse_pos_in_world_space(controller);
-            Rect selection = { v2_floor(mouse_in_world), v2_add(v2_floor(mouse_in_world), v2s(1.f)) };
-            Vector4 selection_color = color_from_hex(0x5ecf4466);
-            f32 selection_z = -2.f;
+            if (controller->selection.valid) {
+                Rect selection = rect_from_points(controller->selection.start, controller->selection.current);
+                selection.min = v2_floor(selection.min);
+                selection.max = v2_add(v2_floor(selection.max), v2s(1.f));
+                Vector4 selection_color = color_from_hex(0x5ecf4466);
+                f32 selection_z = -2.f;
 
-            switch (controller->mode) {
-            case CM_Set_Tile: {
-                if (controller->selection.valid) {
-                    selection = rect_from_points(controller->selection.start, controller->selection.current);
-                    selection.min = v2_floor(selection.min);
-                    selection.max = v2_add(v2_floor(selection.max), v2s(1.f));
-                }
-                imm_begin();
-                imm_rect(selection, selection_z, selection_color);
-                imm_flush();
-            } break;
-            case CM_Set_Wall: {
-                if (controller->selection.valid) {
-                    selection = rect_from_points(controller->selection.start, controller->selection.current);
-                    selection.min = v2_floor(selection.min);
-                    selection.max = v2_add(v2_floor(selection.max), v2s(1.f));
-                    imm_begin();
-                    imm_border_rect(selection, selection_z, 1.f, selection_color);
-                    imm_flush();
-                } else {
+                switch (controller->mode) {
+                case CM_Set_Tile: {
                     imm_begin();
                     imm_rect(selection, selection_z, selection_color);
                     imm_flush();
+                } break;
+                case CM_Set_Wall: {
+                    imm_begin();
+                    imm_border_rect(selection, selection_z, 1.f, selection_color);
+                    imm_flush();
+                } break;
                 }
-            } break;
             }
 
             for (entity_iterator(em)) {
@@ -903,7 +380,7 @@ DLL_EXPORT void tick_game(f32 dt) {
 
                 switch (entity->type) {
 #define DRAW_ENTITIES(type, tick, draw) \
-                case type: draw(em, entity);
+                case type: draw(em, entity); break;
                 ENTITY_FUNCTIONS(DRAW_ENTITIES);
 #undef DRAW_ENTITIES
                 };
@@ -917,11 +394,11 @@ DLL_EXPORT void tick_game(f32 dt) {
         draw_right_handed(viewport);
 
         Font_Collection* fc = find_font_collection(from_cstr("assets/fonts/Menlo-Regular"));
-        Font* font = font_at_size(fc, 48);
+        Font* font = font_at_size(fc, (int)(25.f * g_platform->dpi_scale));
         set_uniform_texture("atlas", font->atlas);
 
         char controller_debug_string[256];
-        Controller* controller = find_entity(em, em->controller_id);
+        Controller* controller = find_entity_by_id(em, em->controller_id);
         if (controller) {
             Vector2 mouse_location = get_mouse_pos_in_world_space(controller);
             Tile* tile_under_mouse = find_tile_at(em, (int)mouse_location.x, (int)mouse_location.y, 0);
