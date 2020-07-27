@@ -41,6 +41,8 @@ Hash_Table _make_hash_table(int key_size, int value_size, Hash_Table_Func* func,
 }
 
 static void rebuild_hash_table(Hash_Table* ht) {
+    mem_set(ht->bucket_layout, 0, sizeof(Hash_Bucket*) * ht->pair_cap);
+    
     for (int i = 0; i < ht->pair_count; ++i) {
         Hash_Bucket* bucket = ht->buckets + i;
         bucket->hash = ht->func((u8*)ht->keys + ht->key_size * i, 0, ht->key_size);
@@ -68,14 +70,18 @@ void* _push_hash_table(Hash_Table* ht, void* key, int key_size, void* value, int
     if (ht->pair_count == ht->pair_cap) {
         reserve_hash_table(ht, 1);
         mem_copy((u8*)ht->keys + key_size * ht->pair_count, key, key_size);
-        mem_copy((u8*)ht->values + value_size * ht->pair_count, value, value_size);
+        
+        if (value) mem_copy((u8*)ht->values + value_size * ht->pair_count, value, value_size);
+        else mem_set((u8*)ht->values + value_size * ht->pair_count, 0, value_size);
+        
         ht->pair_count += 1;
         rebuild_hash_table(ht);
-        return 0;
+        return _find_hash_table(ht, key, key_size);
     }
 
     mem_copy((u8*)ht->keys + key_size * ht->pair_count, key, key_size);
-    mem_copy((u8*)ht->values + value_size * ht->pair_count, value, value_size);
+    if (value) mem_copy((u8*)ht->values + value_size * ht->pair_count, value, value_size);
+    else mem_set((u8*)ht->values + value_size * ht->pair_count, 0, value_size);
 
     Hash_Bucket* bucket = ht->buckets + ht->pair_count;
     bucket->hash = ht->func((u8*)ht->keys + key_size * ht->pair_count, 0, key_size);
@@ -94,7 +100,7 @@ void* _push_hash_table(Hash_Table* ht, void* key, int key_size, void* value, int
 
     ht->pair_count++;
 
-    return 0;
+    return _find_hash_table(ht, key, key_size);
 }
 
 void reserve_hash_table(Hash_Table* ht, int reserve_amount) {
@@ -108,10 +114,10 @@ void reserve_hash_table(Hash_Table* ht, int reserve_amount) {
     mem_set(ht->bucket_layout, 0, sizeof(Hash_Bucket*) * ht->pair_cap);
 }
 
-void* _find_hash_table(Hash_Table* ht, void* key, int key_size) {
+static int index_hash_table(Hash_Table* ht, void* key, int key_size) {
     assert(key_size == ht->key_size);
 
-    if (!ht->pair_count) return 0;
+    if (!ht->pair_count) return -1;
 
     u64 hash = ht->func(key, 0, key_size);
     int index = hash % ht->pair_cap;
@@ -120,12 +126,49 @@ void* _find_hash_table(Hash_Table* ht, void* key, int key_size) {
     while (found) {
         u64 my_hash = found->hash;
         if (my_hash == hash) { // @TEMP } && ht->func(key, (u8*)ht->keys + found->index * key_size, key_size)) {
-            return (u8*)ht->values + ht->value_size * found->index;
+            return found->index;
         }
         found = found->next;
+    }    
+
+    return -1;
+}
+
+void* _find_hash_table(Hash_Table* ht, void* key, int key_size) {
+    assert(key_size == ht->key_size);
+
+    if (!ht->pair_count) return 0;
+
+    int found_index = index_hash_table(ht, key, key_size);
+    if (found_index == -1) return 0;
+
+    return (u8*)ht->values + ht->value_size * found_index;
+}
+
+b32 _remove_hash_table(Hash_Table* ht, void* key, int key_size) {
+    assert(key_size == ht->key_size);
+
+    int found_index = index_hash_table(ht, key, key_size);
+    if (found_index == -1) return false;
+
+    ht->pair_count -= 1;
+
+    if (found_index != ht->pair_count) {
+        mem_move(
+            (u8*)ht->keys + ht->key_size * found_index, 
+            (u8*)ht->keys + ht->key_size * (found_index + 1), 
+            (ht->pair_count - found_index) * ht->key_size
+        );
+        mem_move(
+            (u8*)ht->values + ht->value_size * found_index, 
+            (u8*)ht->values + ht->value_size * (found_index + 1), 
+            (ht->pair_count - found_index) * ht->value_size
+        );
     }
 
-    return 0;
+    rebuild_hash_table(ht);
+
+    return true;
 }
 
 u64 hash_string(void* a, void* b, int size) {

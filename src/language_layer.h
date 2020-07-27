@@ -336,7 +336,33 @@ void reserve_hash_table(Hash_Table* ht, int reserve_amount);
 void* _push_hash_table(Hash_Table* ht, void* key, int key_size, void* value, int value_size);
 #define push_hash_table(ht, key, value) _push_hash_table(ht, &key, sizeof(key), &value, sizeof(value))
 
+b32 _remove_hash_table(Hash_Table* ht, void* key, int key_size);
+#define remove_hash_table(ht, key) _remove_hash_table(ht, &key, sizeof(key))
+
 void* _find_hash_table(Hash_Table* ht, void* key, int key_size);
 #define find_hash_table(ht, key) _find_hash_table(ht, &key, sizeof(key))
+
+inline void* _find_or_add_zeroed_hash_table(Hash_Table* ht, void* key, int key_size) {
+    void* found = _find_hash_table(ht, key, key_size);
+    if (!found) found = _push_hash_table(ht, key, key_size, 0, ht->value_size);
+    return found;
+}
+#define find_or_add_zeroed_hash_table(ht, key) _find_or_add_zeroed_hash_table(ht, &key, sizeof(key))
+
+inline void* key_at_hash_table(Hash_Table* ht, int index) { 
+    assert(index < ht->pair_count);
+    return (u8*)ht->keys + ht->key_size * index;
+}
+inline void* value_at_hash_table(Hash_Table* ht, int index) {
+    assert(index < ht->pair_count);
+    return (u8*)ht->values + ht->value_size * index;
+}
+
+#define Hash_Set Hash_Table
+#define make_hash_set(key, func, allocator) _make_hash_table(sizeof(key), sizeof(key), func, allocator)
+#define reserve_hash_set(hs, amount) reserve_hash_table(hs, amount)
+#define push_hash_set(hs, key) _push_hash_table(hs, &key, sizeof(key), &key, sizeof(key))
+#define remove_hash_set(hs, key) _remove_hash_table(hs, &key, sizeof(key));
+#define find_hash_set(hs, key) _find_hash_table(hs, &key, sizeof(key))
 
 #endif /* LANGUAGE_LAYER_H */

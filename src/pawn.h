@@ -6,6 +6,8 @@
 typedef struct Pawn {
     DEFINE_CHILD_ENTITY;
     Vector2 target_location;
+
+    Path path;
 } Pawn;
 
 Pawn* make_pawn(Entity_Manager* em, Vector2 location);

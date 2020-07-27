@@ -89,8 +89,18 @@ static void tick_controller(Entity_Manager* em, Entity* entity, f32 dt) {
             for (entity_iterator(em)) {
                 Entity* e = entity_from_iterator(iter);
                 if (e->type == ET_Pawn) {
-                    Pawn* p = e->derived;
-                    p->target_location = target_location;
+                    Pawn* pawn = e->derived;
+
+                    b32 can_pathfind = pathfind(
+                        em, 
+                        tile_ref_from_location(mouse_pos_in_world), 
+                        tile_ref_from_location(e->location), 
+                        &pawn->path
+                    );
+                    if (can_pathfind) o_log("[Game] Can pathfind to mouse location");
+                    else o_log("[Game] Can not pathfind to mouse location");
+
+                    break;
                 }
             }
         }

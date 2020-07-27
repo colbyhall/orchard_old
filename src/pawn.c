@@ -8,6 +8,7 @@ Pawn* make_pawn(Entity_Manager* em, Vector2 location) {
     return result;
 }
 
+
 static void tick_pawn(Entity_Manager* em, Entity* entity, f32 dt) {
     assert(entity->type == ET_Pawn);
 
@@ -29,7 +30,13 @@ static void draw_pawn(Entity_Manager* em, Entity* entity) {
     Rect draw_rect = move_rect(entity->bounds, entity->location);
 
     imm_begin();
-    imm_line(pawn->location, pawn->target_location, -4.f, 0.1f, v4(1.f, 1.f, 1.f, 0.5f));
+    for (int i = 0; i < pawn->path.ref_count - 1; ++i) {
+        Tile_Ref a = pawn->path.refs[i];
+        Tile_Ref b = pawn->path.refs[i + 1];
+
+        imm_line(v2((f32)a.x + 0.5f, (f32)a.y + 0.5f), v2((f32)b.x + 0.5f, (f32)b.y + 0.5f), -4.f, 0.1f, v4(1.f, 1.f, 1.f, 0.5f));        
+    }
+
     imm_rect(draw_rect, -4.f, v4(1.f, 0.f, 0.2f, 1.f));
     imm_flush();
 }

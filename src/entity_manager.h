@@ -40,6 +40,15 @@ typedef enum Tile_Content {
     TC_Wall
 } Tile_Content;
 
+typedef struct Tile_Ref {
+    int x, y, z;
+} Tile_Ref;
+
+inline Tile_Ref tile_ref_from_location(Vector2 a) { return (Tile_Ref) { (int)a.x, (int)a.y}; }
+inline b32 tile_ref_eq(Tile_Ref a, Tile_Ref b) { 
+    return a.x == b.x && a.y == b.y && a.z == b.z;
+}
+
 typedef struct Tile {
     Tile_Type type;
     Tile_Content content;
@@ -114,6 +123,7 @@ inline Entity* entity_from_iterator(Entity_Iterator iter) { return iter.manager-
 
 void* find_entity_by_id(Entity_Manager* em, Entity_Id id);
 Tile* find_tile_at(Entity_Manager* em, int x, int y, int z);
+inline Tile* find_tile_by_ref(Entity_Manager* em, Tile_Ref ref) { return find_tile_at(em, ref.x, ref.y, ref.z); }
 Entity_Manager* make_entity_manager(Allocator allocator);
 
 void* _make_entity(Entity_Manager* em, int size, Entity_Type type);
@@ -125,5 +135,15 @@ entry(ET_Pawn, tick_pawn, draw_pawn)
 
 void tick_null(Entity_Manager* em, Entity* entity, f32 dt) { }
 void draw_null(Entity_Manager* em, Entity* entity) { }
+
+typedef struct Path {
+    Tile_Ref* refs;
+    int ref_count;
+} Path;
+
+/**
+ * A* Pathfinding
+ */
+b32 pathfind(Entity_Manager* em, Tile_Ref source, Tile_Ref dest, Path* path);
 
 #endif /* ENTITY_MANAGER_H */
