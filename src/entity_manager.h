@@ -57,6 +57,10 @@ typedef struct Tile {
     };
 } Tile;
 
+typedef struct Chunk_Ref {
+    int x, y;
+} Chunk_Ref;
+
 #define CHUNK_SIZE 16
 typedef struct Chunk {
     int x, y, z;
@@ -94,8 +98,7 @@ typedef struct Entity {
 #define CHUNK_CAP 256
 #define ENTITY_CAP (CHUNK_SIZE * CHUNK_SIZE * CHUNK_CAP)
 typedef struct Entity_Manager {
-    int chunk_count;
-    Chunk chunks[CHUNK_CAP];
+    Hash_Table chunks;
     Allocator tile_memory;
 
     int entity_count;
@@ -136,14 +139,33 @@ entry(ET_Pawn, tick_pawn, draw_pawn)
 void tick_null(Entity_Manager* em, Entity* entity, f32 dt) { }
 void draw_null(Entity_Manager* em, Entity* entity) { }
 
+typedef struct Path_Tile {
+    Tile_Ref parent;
+    f32 f, g, h;
+#if DEBUG_BUILD
+    int times_touched;
+#endif
+} Path_Tile;
+
+
 typedef struct Path {
     Tile_Ref* refs;
     int ref_count;
+
+#if DEBUG_BUILD
+    Hash_Table came_from;
+#endif
 } Path;
 
 /**
  * A* Pathfinding
  */
 b32 pathfind(Entity_Manager* em, Tile_Ref source, Tile_Ref dest, Path* path);
+
+#if DEBUG_BUILD
+
+void draw_pathfind_debug(Entity_Manager* em, Path path);
+
+#endif
 
 #endif /* ENTITY_MANAGER_H */

@@ -193,12 +193,16 @@ static void regen_map(Entity_Manager* em, Random_Seed seed) {
     int chunk_cap_sq = (int)sqrt(CHUNK_CAP);
     for (int x = 0; x < chunk_cap_sq; ++x) {
         for (int y = 0; y < chunk_cap_sq; ++y) {
-            Chunk* chunk = &em->chunks[x + y * chunk_cap_sq];
-            chunk->x = x;
-            chunk->y = y;
-            chunk->z = 0;
+            Chunk chunk = {
+                x, y, 0,
+                mem_alloc_array(em->tile_memory, Tile, CHUNK_SIZE * CHUNK_SIZE)
+            };
 
-            for (int i = 0; i < CHUNK_SIZE * CHUNK_SIZE; ++i) chunk->tiles[i].type = TT_Open;
+            for (int i = 0; i < CHUNK_SIZE * CHUNK_SIZE; ++i) chunk.tiles[i].type = TT_Open;
+
+            Chunk_Ref ref = { x, y };
+
+            push_hash_table(&em->chunks, ref, chunk);
         }
     }
 
@@ -350,8 +354,6 @@ DLL_EXPORT void tick_game(f32 dt) {
     }
     game_state->frame_count += 1;
 
-    o_log("[Game] Tick with %.2fms", dt * 1000.f);
-
     // Do input handling
     for (int i = 0; i < g_platform->num_events; ++i) {
         OS_Event event = g_platform->events[i];
@@ -410,8 +412,8 @@ DLL_EXPORT void tick_game(f32 dt) {
             
             // Draw tile in a single batch
             imm_begin();
-            for (int i = 0; i < em->chunk_count; ++i) {
-                Chunk* chunk = &em->chunks[i];
+            for (int i = 0; i < em->chunks.pair_count; ++i) {
+                Chunk* chunk = value_at_hash_table(&em->chunks, i);
                 
                 Vector2 min = v2((f32)chunk->x * CHUNK_SIZE, (f32)chunk->y * CHUNK_SIZE);
                 Vector2 max = v2_add(min, v2(CHUNK_SIZE, CHUNK_SIZE));
@@ -463,8 +465,8 @@ DLL_EXPORT void tick_game(f32 dt) {
             Texture2d* walls = find_texture2d(from_cstr("assets/sprites/walls"));
             set_uniform_texture("diffuse", *walls);
             imm_begin();
-            for (int i = 0; i < em->chunk_count; ++i) {
-                Chunk* chunk = &em->chunks[i];
+            for (int i = 0; i < em->chunks.pair_count; ++i) {
+                Chunk* chunk = value_at_hash_table(&em->chunks, i);
                 
                 Vector2 min = v2((f32)chunk->x * CHUNK_SIZE, (f32)chunk->y * CHUNK_SIZE);
                 Vector2 max = v2_add(min, v2(CHUNK_SIZE, CHUNK_SIZE));
@@ -557,7 +559,7 @@ DLL_EXPORT void tick_game(f32 dt) {
         );
 
         imm_begin();
-        imm_string(from_cstr(buffer), font, 100000.f, v2(0.f, viewport.max.y - 48.f), -4.f, v4s(1.f));
+        imm_string(from_cstr(buffer), font, (f32)font->size, 100000.f, v2(0.f, viewport.max.y - 48.f), -4.f, v4s(1.f));
         imm_flush();
     }
 

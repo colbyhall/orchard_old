@@ -84,9 +84,9 @@ void imm_textured_line(Vector2 a1, Vector2 a2, f32 z, f32 thickness, Vector2 uv0
 inline void imm_line(Vector2 a1, Vector2 a2, f32 z, f32 thickness, Vector4 color) { imm_textured_line(a1, a2, z, thickness, v2s(-1.f), v2s(-1.f), color); }
 void imm_arrow(Vector2 a1, Vector2 a2, f32 z, f32 thickness, Vector4 color);
 
-void imm_glyph(Font_Glyph* g, Font* font, Vector2 xy, f32 z, Vector4 color);
-Font_Glyph* imm_rune(Rune r, Font* font, Vector2 xy, f32 z, Vector4 color);
-void imm_string(String str, Font* font, f32 max_width, Vector2 xy, f32 z, Vector4 color);
+void imm_glyph(Font_Glyph* g, Font* font, f32 size, Vector2 xy, f32 z, Vector4 color);
+Font_Glyph* imm_rune(Rune r, Font* font, f32 size, Vector2 xy, f32 z, Vector4 color);
+void imm_string(String str, Font* font, f32 size, f32 max_width, Vector2 xy, f32 z, Vector4 color);
 
 void imm_textured_plane(Vector3 pos, Quaternion rot, Rect rect, Vector2 uv0, Vector2 uv1, Vector4 color);
 inline void imm_plane(Vector3 pos, Quaternion rot, Rect rect, Vector4 color) { imm_textured_plane(pos, rot, rect, v2s(-1.f), v2s(-1.f), color); }

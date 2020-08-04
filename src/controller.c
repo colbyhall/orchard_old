@@ -94,8 +94,8 @@ static void tick_controller(Entity_Manager* em, Entity* entity, f32 dt) {
                     f64 start = g_platform->time_in_seconds();
                     b32 can_pathfind = pathfind(
                         em, 
-                        tile_ref_from_location(mouse_pos_in_world), 
                         tile_ref_from_location(e->location), 
+                        tile_ref_from_location(mouse_pos_in_world), 
                         &pawn->path
                     );
                     f64 duration = g_platform->time_in_seconds() - start;

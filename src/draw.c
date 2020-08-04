@@ -470,53 +470,57 @@ void imm_textured_circle(f32 radius, int segments, Vector2 xy, f32 z, Vector2 uv
     }
 }
 
-void imm_glyph(Font_Glyph* g, Font* font, Vector2 xy, f32 z, Vector4 color) {
+void imm_glyph(Font_Glyph* g, Font* font, f32 size, Vector2 xy, f32 z, Vector4 color) {
+    f32 scale = size / (f32)font->size;
+
     // Draw font from bottom up. Yes this makes doing paragraphs harder but it goes along with OpenGL's coordinate system
-    xy = v2_sub(xy, v2(0.f, font->descent));
-    f32 x0 = xy.x + g->bearing_x;
-    f32 y1 = xy.y - g->bearing_y;
-    f32 x1 = x0 + g->width;
-    f32 y0 = y1 - g->height;
+    xy = v2_sub(xy, v2(0.f, font->descent * scale));
+    f32 x0 = xy.x + g->bearing_x * scale;
+    f32 y1 = xy.y - g->bearing_y * scale;
+    f32 x1 = x0 + g->width * scale;
+    f32 y0 = y1 - g->height * scale;
     Rect rect = rect_from_raw(x0, y0, x1, y1);
 
     imm_textured_rect(rect, z, g->uv0, g->uv1, color);
 }
 
-Font_Glyph* imm_rune(Rune r, Font* font, Vector2 xy, f32 z, Vector4 color) {
+Font_Glyph* imm_rune(Rune r, Font* font, f32 size, Vector2 xy, f32 z, Vector4 color) {
     Font_Glyph* g = glyph_from_rune(font, r);
     if (g != 0) {
-        imm_glyph(g, font, xy, z, color);
+        imm_glyph(g, font, size, xy, z, color);
         return g;
     }
 
     return 0;
 }
 
-void imm_string(String str, Font* font, f32 max_width, Vector2 xy, f32 z, Vector4 color) {
+void imm_string(String str, Font* font, f32 size, f32 max_width, Vector2 xy, f32 z, Vector4 color) {
     Vector2 orig_xy = xy;
+
+    f32 scale = size / (f32)font->size;
 
     Font_Glyph* space_g = glyph_from_rune(font, ' ');
     for (int i = 0; i < str.len; ++i) {
-        if (xy.x + space_g->advance > orig_xy.x + max_width) {
-            xy.x = orig_xy.x;
-            xy.y -= (f32)font->size;
+        if (xy.x + space_g->advance * scale > orig_xy.x + max_width) {
+            xy.x = orig_xy.x ;
+            xy.y -= size;
         }
 
         char c = str.data[i]; // @TODO(colby): UTF8
         switch (c) {
         case '\n': {
             xy.x = orig_xy.x;
-            xy.y -= (f32)font->size;
+            xy.y -= size;
         } break;
         case '\r': {
             xy.x = orig_xy.x;
         } break;
         case '\t': {
-            xy.x += space_g->advance * 4.f;
+            xy.x += space_g->advance * 4.f * scale;
         } break;
         default: {
-            Font_Glyph* g = imm_rune(c, font, xy, z, color);
-            xy.x += g->advance;
+            Font_Glyph* g = imm_rune(c, font, size, xy, z, color);
+            xy.x += g->advance * scale;
         } break;
         }
     }

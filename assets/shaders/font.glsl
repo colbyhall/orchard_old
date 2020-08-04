@@ -22,6 +22,8 @@ uniform sampler2D atlas;
 
 void main() {
     vec4 sample = texture(atlas, frag_uv);
-    final_color = vec4(frag_color.xyz, sample.r);
+    if (frag_uv.x > -1.0) {
+        final_color = vec4(frag_color.xyz, sample.r);
+    } else final_color = frag_color;
 }
 #endif
