@@ -15,7 +15,7 @@ typedef struct Controller_Selection {
     Vector2 current;
 } Controller_Selection;
 
-#define MAX_CAMERA_ORTHO_SIZE 40.f
+#define MAX_CAMERA_ORTHO_SIZE 35.f
 #define MIN_CAMERA_ORTHO_SIZE 5.f
 typedef struct Controller {
     DEFINE_CHILD_ENTITY;

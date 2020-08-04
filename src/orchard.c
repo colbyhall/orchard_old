@@ -42,7 +42,7 @@ Hash_Table _make_hash_table(int key_size, int value_size, Hash_Table_Func* func,
 
 static void rebuild_hash_table(Hash_Table* ht) {
     mem_set(ht->bucket_layout, 0, sizeof(Hash_Bucket*) * ht->pair_cap);
-    
+
     for (int i = 0; i < ht->pair_count; ++i) {
         Hash_Bucket* bucket = ht->buckets + i;
         bucket->hash = ht->func((u8*)ht->keys + ht->key_size * i, 0, ht->key_size);
@@ -106,7 +106,12 @@ void* _push_hash_table(Hash_Table* ht, void* key, int key_size, void* value, int
 void reserve_hash_table(Hash_Table* ht, int reserve_amount) {
     assert(reserve_amount > 0);
 
-    ht->pair_cap += reserve_amount; // @TODO(colby): Small alg for best reserve amount
+    int new_cap = ht->pair_cap + reserve_amount;
+    while (ht->pair_cap < new_cap) {
+        ht->pair_cap += ht->pair_cap >> 1;
+        ht->pair_cap++;
+    }
+
     ht->keys          = mem_realloc(ht->allocator, ht->keys, ht->key_size * ht->pair_cap);
     ht->values        = mem_realloc(ht->allocator, ht->values, ht->value_size * ht->pair_cap);
     ht->buckets       = mem_realloc(ht->allocator, ht->buckets, sizeof(Hash_Bucket) * ht->pair_cap);

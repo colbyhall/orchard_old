@@ -97,8 +97,6 @@ static void tick_controller(Entity_Manager* em, Entity* entity, f32 dt) {
                         tile_ref_from_location(e->location), 
                         &pawn->path
                     );
-                    if (can_pathfind) o_log("[Game] Can pathfind to mouse location");
-                    else o_log("[Game] Can not pathfind to mouse location");
 
                     break;
                 }

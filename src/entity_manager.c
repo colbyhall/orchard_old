@@ -203,9 +203,11 @@ static u64 hash_generic(void* a, void* b, int size) {
 }
 
 static f32 distance_between_tiles(Tile_Ref a, Tile_Ref b) {
-    const Vector2 a_xy = v2((f32)a.x, (f32)a.y);
-    const Vector2 b_xy = v2((f32)b.x, (f32)b.y);
-    return v2_len(v2_sub(a_xy, b_xy));
+    return (f32)(abs(b.x - a.x) + abs(b.y - a.y));
+
+    // Vector2 a_xy = v2((f32)a.x, (f32)a.y);
+    // Vector2 b_xy = v2((f32)b.x, (f32)b.y);
+    // return v2_len(v2_sub(a_xy, b_xy));
 }
 
 static b32 is_tile_walkable(Tile* tile) {
@@ -225,14 +227,14 @@ b32 pathfind(Entity_Manager* em, Tile_Ref source, Tile_Ref dest, Path* path) {
         hash_generic, 
         g_platform->frame_arena
     );
-    reserve_hash_set(&open, 64);
+    reserve_hash_set(&open, 4096);
 
     Hash_Set closed = make_hash_set(
         Tile_Ref, 
         hash_generic, 
         g_platform->frame_arena
     );
-    reserve_hash_set(&closed, 512);
+    reserve_hash_set(&closed, 4096);
 
     Hash_Table came_from = make_hash_table(
         Tile_Ref, 
@@ -240,20 +242,14 @@ b32 pathfind(Entity_Manager* em, Tile_Ref source, Tile_Ref dest, Path* path) {
         hash_generic, 
         g_platform->frame_arena
     ); // Key is the tile. Value is the details
-    reserve_hash_table(&came_from, 512);
+    reserve_hash_table(&came_from, 4096);
 
     push_hash_set(&open, source);
-    push_hash_table(
-        &came_from, 
-        source, 
-        (Path_Tile) {
-            .parent = source
-        }
-    );
+    push_hash_table(&came_from, source, (Path_Tile) { .parent = source });
 
     while (open.pair_count) {
-        // @SPEED @SPEED @SPEED
         // Find path tile with lowest f
+
         Tile_Ref current_ref = (*(Tile_Ref*)key_at_hash_table(&open, 0));
         Path_Tile* current_tile = find_hash_table(&came_from, current_ref);
         for (int i = 1; i < open.pair_count; ++i) {
@@ -270,63 +266,71 @@ b32 pathfind(Entity_Manager* em, Tile_Ref source, Tile_Ref dest, Path* path) {
         b32 ok = remove_hash_set(&open, current_ref);
         assert(ok);
 
-        // Checking the neighbors
-        for (int y = -1; y < 2; ++y) {
-            for (int x = -1; x < 2; ++x) {
-                if (x == 0 && y == 0) continue;
+        for (int i = 0; i < 9; ++i) {
+            int y = i / 3;
+            int x = i - y * 3;
+            y--;
+            x--;
 
-                Tile_Ref neighbor_ref = { current_ref.x + x, current_ref.y + y, current_ref.z };
+            if (x == 0 && y == 0) continue;
 
-                Tile* found_tile = find_tile_by_ref(em, neighbor_ref);
-                if (!found_tile) continue;
+            Tile_Ref neighbor_ref = { current_ref.x + x, current_ref.y + y, current_ref.z };
 
-                if (tile_ref_eq(dest, neighbor_ref)) {
-                    // Do the path tracing
-                    if (path) {
-                        int ref_count = 1;
-                        Tile_Ref final_ref = current_ref;
-                        Path_Tile* final_tile = current_tile;
+            Tile* found_tile = find_tile_by_ref(em, neighbor_ref);
+            if (!found_tile) continue;
 
-                        while(!tile_ref_eq(final_tile->parent, final_ref)) {
-                            ref_count += 1;
-                            final_ref = final_tile->parent;
-                            final_tile = find_hash_table(&came_from, final_ref);
-                        }
+            if (tile_ref_eq(dest, neighbor_ref)) {
+                // Do the path tracing
+                int ref_count = 1;
+                Tile_Ref final_ref = current_ref;
+                Path_Tile* final_tile = current_tile;
 
-                        path->refs = mem_alloc_array(g_platform->permanent_arena, Tile_Ref, ref_count);
-                        path->ref_count = ref_count;
-
-                        final_ref = current_ref;
-                        final_tile = current_tile;
-                        path->refs[ref_count - 1] = dest;
-
-                        while(!tile_ref_eq(final_tile->parent, final_ref)) {
-                            ref_count -= 1;
-                            path->refs[ref_count - 1] = final_ref;
-                            final_ref = final_tile->parent;
-                            final_tile = find_hash_table(&came_from, final_ref);
-                        }
-                    }
-
-                    return true;
+                while(!tile_ref_eq(final_tile->parent, final_ref)) {
+                    ref_count += 1;
+                    final_ref = final_tile->parent;
+                    final_tile = find_hash_table(&came_from, final_ref);
                 }
 
-                if (find_hash_set(&closed, neighbor_ref) == 0 && is_tile_walkable(found_tile)) {
-                    f32 g = current_tile->g + ((x + y) % 2 == 0 ? 1.44f : 1.f);
-                    f32 h = distance_between_tiles(neighbor_ref, dest);
-                    f32 f = g + h;
+                path->refs = mem_alloc_array(g_platform->permanent_arena, Tile_Ref, ref_count);
+                path->ref_count = ref_count;
 
-                    Path_Tile* found_path_tile = find_hash_table(&came_from, neighbor_ref);
-                    if (!found_path_tile || (found_path_tile && found_path_tile->f > f)) {
-                        if (!found_path_tile) found_path_tile = push_hash_table(&came_from, neighbor_ref, (Path_Tile) {0});
+                final_ref = current_ref;
+                final_tile = current_tile;
+                path->refs[ref_count - 1] = dest;
 
-                        found_path_tile->f = f;
-                        found_path_tile->h = h;
-                        found_path_tile->g = g;
-                        found_path_tile->parent = current_ref;
+                while(!tile_ref_eq(final_tile->parent, final_ref)) {
+                    ref_count -= 1;
+                    path->refs[ref_count - 1] = final_ref;
+                    final_ref = final_tile->parent;
+                    final_tile = find_hash_table(&came_from, final_ref);
+                }
 
-                        push_hash_set(&open, neighbor_ref);
-                    }
+                return true;
+            }
+
+            if (find_hash_set(&closed, neighbor_ref) == 0 && is_tile_walkable(found_tile)) {
+                b32 is_diagonal = (x + y) % 2 == 0;
+
+                if (is_diagonal) {
+                    Tile* tile_a = find_tile_at(em, x, 0, 0);
+                    Tile* tile_b = find_tile_at(em, 0, y, 0);
+                    if (!is_tile_walkable(tile_a) && !is_tile_walkable(tile_b)) continue;
+                }
+
+                f32 g = current_tile->g + (is_diagonal ? 1.44f : 1.f);
+                f32 h = distance_between_tiles(neighbor_ref, dest);
+                f32 f = g + h;
+
+                Path_Tile* found_path_tile = find_hash_table(&came_from, neighbor_ref);
+                if (!found_path_tile || (found_path_tile && found_path_tile->f > f)) {
+                    if (!found_path_tile) found_path_tile = push_hash_table(&came_from, neighbor_ref, (Path_Tile) {0});
+
+                    found_path_tile->f = f;
+                    found_path_tile->h = h;
+                    found_path_tile->g = g;
+                    found_path_tile->parent = current_ref;
+
+                    push_hash_set(&open, neighbor_ref);
                 }
             }
         }
