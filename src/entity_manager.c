@@ -247,7 +247,12 @@ b32 pathfind(Entity_Manager* em, Tile_Ref source, Tile_Ref dest, Path* path) {
         f64 min_start = g_platform->time_in_seconds();
         int current_index = pop_min_float_heap(&open);
         Tile_Ref current_ref = (*(Tile_Ref*)key_at_hash_table(&came_from, current_index));
-        Path_Tile current_tile = (*(Path_Tile*)find_hash_table(&came_from, current_ref));
+        Path_Tile* ptr_to_tile = find_hash_table(&came_from, current_ref);
+#if DEBUG_BUILD
+        ptr_to_tile->closed = 1;
+        ptr_to_tile->times_touched++;
+#endif
+        Path_Tile current_tile = *ptr_to_tile;
         time_doing_min += g_platform->time_in_seconds() - min_start;
 
         f64 pre_closed_start = g_platform->time_in_seconds();
@@ -273,7 +278,9 @@ b32 pathfind(Entity_Manager* em, Tile_Ref source, Tile_Ref dest, Path* path) {
             final_ref = current_ref;
             final_tile = current_tile;
             path->refs[ref_count - 1] = dest;
+#if DEBUG_BUILD
             path->came_from = came_from;
+#endif
 
             while(!tile_ref_eq(final_tile.parent, final_ref)) {
                 ref_count -= 1;
@@ -282,7 +289,7 @@ b32 pathfind(Entity_Manager* em, Tile_Ref source, Tile_Ref dest, Path* path) {
                 final_tile = (*(Path_Tile*)find_hash_table(&came_from, final_ref));
             }
 
-            // o_log("spent %.2fms doing hash. spent %.2fms doing min lookup. spent %.2fms doing math. spent %.2fms doing entity manager. wasted %.2fms", time_doing_hash * 1000.f, time_doing_min * 1000.f, time_doing_math * 1000.f, time_doing_entity_manager * 1000.f, time_wasted * 1000.f);
+            o_log("spent %.2fms doing hash. spent %.2fms doing min lookup. spent %.2fms doing math. spent %.2fms doing entity manager. wasted %.2fms", time_doing_hash * 1000.f, time_doing_min * 1000.f, time_doing_math * 1000.f, time_doing_entity_manager * 1000.f, time_wasted * 1000.f);
 
             return true;
         }
@@ -355,6 +362,9 @@ b32 pathfind(Entity_Manager* em, Tile_Ref source, Tile_Ref dest, Path* path) {
 void draw_pathfind_debug(Entity_Manager* em, Path path) {
     Controller* controller = find_entity_by_id(em, em->controller_id);
 
+    Vector2 mouse_pos_in_world = get_mouse_pos_in_world_space(controller);
+    Tile_Ref mouse_tile = tile_ref_from_location(mouse_pos_in_world);
+
     set_shader(find_shader(from_cstr("assets/shaders/font")));
     draw_from(controller->location, controller->current_ortho_size);
 
@@ -370,17 +380,20 @@ void draw_pathfind_debug(Entity_Manager* em, Path path) {
         Vector2 draw_min = v2((f32)tile_ref->x, (f32)tile_ref->y);
         Rect draw_rect = { draw_min, v2_add(draw_min, v2s(1.f)) };
 
-        f32 r = fmodf(tile->g, 25.f) / 25.f;
-        f32 g = 1.f - r;
+        f32 r = (tile->times_touched - 1) / 6.f;
+        f32 g = tile->g / tile->f;
+        f32 b = tile->h / tile->f;
 
-        imm_rect(draw_rect, -4.f, v4(r, g, 0.f, 0.5f));
+        if (tile->closed) imm_rect(draw_rect, -4.f, v4(r, g, b, 1.f));
+        else imm_border_rect(draw_rect, -4.f, 0.1f, v4(r, g, b, 1.f));
 
-
-        if (controller->current_ortho_size <= 10.f) {
+        f32 dist_between_tiles = distance_between_tiles(mouse_tile, *tile_ref);
+        if (dist_between_tiles < 5.f) {
             char buffer[64];
             sprintf(buffer, "F: %.2f\nG: %.2f\nH: %.2f\nTT: %i", tile->f, tile->g, tile->h, tile->times_touched);
 
             imm_string(from_cstr(buffer), font, 0.2f, 1000.f, v2(draw_min.x, draw_min.y + 1.f - 0.2f), -4.f, v4s(1.f));
+
         }
     }
     imm_flush();

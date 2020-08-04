@@ -551,11 +551,12 @@ DLL_EXPORT void tick_game(f32 dt) {
         char buffer[512];
         sprintf(
             buffer, 
-            "FPS: %i\nFrame Time: %.3fms\n  Tick Time: %.3fms\n  Draw Time: %.3fms", 
+            "FPS: %i\nFrame Time: %.3fms\n  Tick Time: %.3fms\n  Draw Time: %.3fms\nBuild: %s", 
             game_state->fps,
             precise_dt * 1000.0,
             tick_duration * 1000.0,
-            draw_duration * 1000.0
+            draw_duration * 1000.0,
+            DEBUG_BUILD ? "Debug" : "Release"
         );
 
         imm_begin();

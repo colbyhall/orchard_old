@@ -7,6 +7,14 @@
 #include <string.h>
 #include <stdarg.h>
 
+#ifndef DEBUG_BUILD
+#define DEBUG_BUILD 0
+#endif
+
+#ifndef RELEASE_BUILD
+#define RELEASE_BUILD 0
+#endif
+
 #if defined(_WIN64) || defined(__x86_64__) || defined(_M_X64) || defined(__64BIT__) || defined(__powerpc64__) || defined(__ppc64__)
 #define PLATFORM_64BIT 1
 #define PLATFORM_32BIT 0

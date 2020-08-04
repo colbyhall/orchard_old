@@ -520,7 +520,7 @@ void imm_string(String str, Font* font, f32 size, f32 max_width, Vector2 xy, f32
         } break;
         default: {
             Font_Glyph* g = imm_rune(c, font, size, xy, z, color);
-            xy.x += g->advance * scale;
+            if (g) xy.x += g->advance * scale;
         } break;
         }
     }

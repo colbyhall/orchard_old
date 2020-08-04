@@ -26,7 +26,9 @@ static void tick_pawn(Entity_Manager* em, Entity* entity, f32 dt) {
 static void draw_pawn(Entity_Manager* em, Entity* entity) {
     Pawn* pawn = entity->derived;
 
+#if DEBUG_BUILD
     draw_pathfind_debug(em, pawn->path);
+#endif
 
     set_shader(find_shader(from_cstr("assets/shaders/basic2d")));
     Rect draw_rect = move_rect(entity->bounds, entity->location);

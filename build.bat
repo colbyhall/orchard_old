@@ -17,7 +17,8 @@ del *.dll
 set debug=/Zi /DDEBUG_BUILD
 set release=/O2 /Zi /DRELEASE_BUILD
 set build_mode=%debug%
-if "%1" == "release" (set mode=%release%)
+if "%1" == "-r" (set build_mode=%release%)
+if "%1" == "-release" (set build_mode=%release%)
 
 set defines=/D_CRT_SECURE_NO_WARNINGS 
 set includes=/I../deps/ 

@@ -144,6 +144,7 @@ typedef struct Path_Tile {
     f32 f, g, h;
 #if DEBUG_BUILD
     int times_touched;
+    b32 closed;
 #endif
 } Path_Tile;
 
