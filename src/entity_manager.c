@@ -238,6 +238,11 @@ static b32 is_tile_traversable(Tile* tile) {
     return true;
 }
 
+// There are some optimizations i want to do here.
+//
+// 1. Store Path_Tile similar to how we store tiles in the entity manager. We'll have chunks that we can easily look into 
+// 2. Path_Tile needs to store if the tile is traversable. The goal is to get down the number of times we check tiles from the entity manager as that can be very expensive
+// 3. Looser heuristic function that sacrifices smallest path for speed
 b32 pathfind(Entity_Manager* em, Tile_Ref source, Tile_Ref dest, Path* path) {
     if (tile_ref_eq(source, dest)) return true;
 
@@ -261,8 +266,11 @@ b32 pathfind(Entity_Manager* em, Tile_Ref source, Tile_Ref dest, Path* path) {
     f64 time_doing_math = 0.0;
     f64 time_doing_entity_manager = 0.0;
     f64 time_wasted = 0.0;
+    int tiles_checked = 0;
 
     while (open.count) {
+        tiles_checked += 1;
+
         // Find path tile with lowest f
         f64 min_start = g_platform->time_in_seconds();
         int current_index = pop_min_float_heap(&open);
@@ -310,7 +318,7 @@ b32 pathfind(Entity_Manager* em, Tile_Ref source, Tile_Ref dest, Path* path) {
 
             path->refs[0] = source;
 
-            o_log("spent %.2fms doing hash. spent %.2fms doing min lookup. spent %.2fms doing math. spent %.2fms doing entity manager. wasted %.2fms", time_doing_hash * 1000.f, time_doing_min * 1000.f, time_doing_math * 1000.f, time_doing_entity_manager * 1000.f, time_wasted * 1000.f);
+            o_log("spent %.2fms doing hash. spent %.2fms doing min lookup. spent %.2fms doing math. spent %.2fms doing entity manager. wasted %.2fms. checked %i tiles", time_doing_hash * 1000.f, time_doing_min * 1000.f, time_doing_math * 1000.f, time_doing_entity_manager * 1000.f, time_wasted * 1000.f, tiles_checked);
 
             return true;
         }
@@ -326,6 +334,8 @@ b32 pathfind(Entity_Manager* em, Tile_Ref source, Tile_Ref dest, Path* path) {
             if (x == 0 && y == 0) continue;
 
             Tile_Ref neighbor_ref = { current_ref.x + x, current_ref.y + y, current_ref.z };
+
+            tiles_checked += 1;
 
             f64 em_time = g_platform->time_in_seconds();
             Tile* found_tile = find_tile_by_ref(em, neighbor_ref);
