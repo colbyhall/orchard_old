@@ -142,9 +142,9 @@ void draw_null(Entity_Manager* em, Entity* entity) { }
 typedef struct Path_Tile {
     Tile_Ref parent;
     f32 f, g, h;
+
 #if DEBUG_BUILD
     int times_touched;
-    b32 closed;
 #endif
 } Path_Tile;
 

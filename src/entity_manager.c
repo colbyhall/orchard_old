@@ -71,11 +71,24 @@ static u64 hash_generic(void* a, void* b, int size) {
     return fnv1_hash(a, size);
 }
 
+static u64 hash_chunk_ref(void* a, void* b, int size) {
+    assert(sizeof(Chunk_Ref) == size);
+
+    Chunk_Ref* a_ref = a;
+    if (b) {
+        Chunk_Ref* b_ref = b;
+            
+        return a_ref->x == b_ref->x && a_ref->y == b_ref->y;
+    }
+
+    return fnv1_hash(a, size);
+}
+
 Entity_Manager* make_entity_manager(Allocator allocator) {
     Entity_Manager* result = mem_alloc_struct(allocator, Entity_Manager);
 
     result->tile_memory = allocator;
-    result->chunks = make_hash_table(Chunk_Ref, Chunk, hash_generic, allocator);
+    result->chunks = make_hash_table(Chunk_Ref, Chunk, hash_chunk_ref, allocator);
     reserve_hash_table(&result->chunks, 256);
 
     result->entity_memory = pool_allocator(allocator, ENTITY_CAP + ENTITY_CAP / 2, 256);
@@ -256,7 +269,6 @@ b32 pathfind(Entity_Manager* em, Tile_Ref source, Tile_Ref dest, Path* path) {
         Tile_Ref current_ref = (*(Tile_Ref*)key_at_hash_table(&came_from, current_index));
         Path_Tile* ptr_to_tile = find_hash_table(&came_from, current_ref);
 #if DEBUG_BUILD
-        ptr_to_tile->closed = 1;
         ptr_to_tile->times_touched++;
 #endif
         Path_Tile current_tile = *ptr_to_tile;
@@ -291,10 +303,12 @@ b32 pathfind(Entity_Manager* em, Tile_Ref source, Tile_Ref dest, Path* path) {
 
             while(!tile_ref_eq(final_tile.parent, final_ref)) {
                 ref_count -= 1;
-                path->refs[ref_count - 1] = final_ref;
+                path->refs[ref_count] = final_ref;
                 final_ref = final_tile.parent;
                 final_tile = (*(Path_Tile*)find_hash_table(&came_from, final_ref));
             }
+
+            path->refs[0] = source;
 
             o_log("spent %.2fms doing hash. spent %.2fms doing min lookup. spent %.2fms doing math. spent %.2fms doing entity manager. wasted %.2fms", time_doing_hash * 1000.f, time_doing_min * 1000.f, time_doing_math * 1000.f, time_doing_entity_manager * 1000.f, time_wasted * 1000.f);
 
@@ -309,10 +323,7 @@ b32 pathfind(Entity_Manager* em, Tile_Ref source, Tile_Ref dest, Path* path) {
             y--;
             x--;
 
-            if (x == 0 && y == 0) {
-                time_wasted += g_platform->time_in_seconds() - n_start;
-                continue;
-            }
+            if (x == 0 && y == 0) continue;
 
             Tile_Ref neighbor_ref = { current_ref.x + x, current_ref.y + y, current_ref.z };
 
@@ -350,10 +361,10 @@ b32 pathfind(Entity_Manager* em, Tile_Ref source, Tile_Ref dest, Path* path) {
                 found_path_tile->f = f;
                 found_path_tile->h = h;
                 found_path_tile->g = g;
+                found_path_tile->parent = current_ref;
 #if DEBUG_BUILD
                 found_path_tile->times_touched += 1;
 #endif
-                found_path_tile->parent = current_ref;
 
                 push_min_float_heap(&open, f, index_hash_table(&came_from, neighbor_ref));
             }
@@ -391,11 +402,11 @@ void draw_pathfind_debug(Entity_Manager* em, Path path) {
         f32 g = tile->g / tile->f;
         f32 b = tile->h / tile->f;
 
-        if (tile->closed) imm_rect(draw_rect, -4.f, v4(r, g, b, 1.f));
-        else imm_border_rect(draw_rect, -4.f, 0.1f, v4(r, g, b, 1.f));
+        if (tile->times_touched > 1) imm_rect(draw_rect, -4.f, v4(r, g, b, 7.f));
+        else imm_rect(draw_rect, -4.f, v4(r, g, b, 0.3f));
 
         f32 dist_between_tiles = distance_between_tiles(mouse_tile, *tile_ref);
-        if (dist_between_tiles < 5.f) {
+        if (dist_between_tiles < 5.f && controller->current_ortho_size <= 15.f) {
             char buffer[64];
             sprintf(buffer, "F: %.2f\nG: %.2f\nH: %.2f\nTT: %i", tile->f, tile->g, tile->h, tile->times_touched);
 

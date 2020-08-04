@@ -76,7 +76,7 @@ void* _push_hash_table(Hash_Table* ht, void* key, int key_size, void* value, int
         
         ht->pair_count += 1;
         rebuild_hash_table(ht);
-        return _find_hash_table(ht, key, key_size);
+        return (u8*)ht->values + value_size * (ht->pair_count - 1);
     }
 
     mem_copy((u8*)ht->keys + key_size * ht->pair_count, key, key_size);
@@ -100,7 +100,7 @@ void* _push_hash_table(Hash_Table* ht, void* key, int key_size, void* value, int
 
     ht->pair_count++;
 
-    return _find_hash_table(ht, key, key_size);
+    return (u8*)ht->values + value_size * (ht->pair_count - 1);
 }
 
 void reserve_hash_table(Hash_Table* ht, int reserve_amount) {
