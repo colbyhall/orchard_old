@@ -203,6 +203,13 @@ static u64 hash_tile_ref(void* a, void* b, int size) {
     return fnv1_hash(a, size);
 }
 
+static f32 pathfind_heuristic(Tile_Ref a, Tile_Ref b) {
+    int dx = abs(b.x - a.x);
+    int dy = abs(b.y - a.y);
+
+    return (f32)(dx + dy);
+}
+
 static f32 distance_between_tiles(Tile_Ref a, Tile_Ref b) {
     Vector2 a_xy = v2((f32)a.x, (f32)a.y);
     Vector2 b_xy = v2((f32)b.x, (f32)b.y);
@@ -331,7 +338,7 @@ b32 pathfind(Entity_Manager* em, Tile_Ref source, Tile_Ref dest, Path* path) {
             b32 is_diagonal = abs(x) + abs(y) == 2;
 
             f32 g = current_tile.g + (is_diagonal ? 1.4f : 1.f);
-            f32 h = distance_between_tiles(neighbor_ref, dest);
+            f32 h = pathfind_heuristic(neighbor_ref, dest);
             f32 f = g + h;
             time_doing_math += g_platform->time_in_seconds() - math_start;
 
