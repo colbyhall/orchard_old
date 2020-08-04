@@ -375,10 +375,13 @@ void draw_pathfind_debug(Entity_Manager* em, Path path) {
 
         imm_rect(draw_rect, -4.f, v4(r, g, 0.f, 0.5f));
 
-        char buffer[64];
-        sprintf(buffer, "F: %.2f\nG: %.2f\nH: %.2f\nTT: %i", tile->f, tile->g, tile->h, tile->times_touched);
 
-        imm_string(from_cstr(buffer), font, 0.2f, 1000.f, v2(draw_min.x, draw_min.y + 1.f - 0.2f), -4.f, v4s(1.f));
+        if (controller->current_ortho_size <= 10.f) {
+            char buffer[64];
+            sprintf(buffer, "F: %.2f\nG: %.2f\nH: %.2f\nTT: %i", tile->f, tile->g, tile->h, tile->times_touched);
+
+            imm_string(from_cstr(buffer), font, 0.2f, 1000.f, v2(draw_min.x, draw_min.y + 1.f - 0.2f), -4.f, v4s(1.f));
+        }
     }
     imm_flush();
 }
