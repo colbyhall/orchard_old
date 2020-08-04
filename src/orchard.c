@@ -119,7 +119,7 @@ void reserve_hash_table(Hash_Table* ht, int reserve_amount) {
     mem_set(ht->bucket_layout, 0, sizeof(Hash_Bucket*) * ht->pair_cap);
 }
 
-static int index_hash_table(Hash_Table* ht, void* key, int key_size) {
+int _index_hash_table(Hash_Table* ht, void* key, int key_size) {
     assert(key_size == ht->key_size);
 
     if (!ht->pair_count) return -1;
@@ -144,7 +144,7 @@ void* _find_hash_table(Hash_Table* ht, void* key, int key_size) {
 
     if (!ht->pair_count) return 0;
 
-    int found_index = index_hash_table(ht, key, key_size);
+    int found_index = _index_hash_table(ht, key, key_size);
     if (found_index == -1) return 0;
 
     return (u8*)ht->values + ht->value_size * found_index;
@@ -153,7 +153,7 @@ void* _find_hash_table(Hash_Table* ht, void* key, int key_size) {
 b32 _remove_hash_table(Hash_Table* ht, void* key, int key_size) {
     assert(key_size == ht->key_size);
 
-    int found_index = index_hash_table(ht, key, key_size);
+    int found_index = _index_hash_table(ht, key, key_size);
     if (found_index == -1) return false;
 
     ht->pair_count -= 1;
@@ -206,6 +206,103 @@ static void regen_map(Entity_Manager* em, Random_Seed seed) {
     set_controller(em, controller);
 }
 
+Float_Heap make_float_heap(Allocator allocator, int reserve) {
+    Float_Heap result = { .allocator = allocator };
+    reserve_float_heap(&result, reserve + 1);
+    result.buckets[0].value = 0.f;
+    return result;
+}
+
+void reserve_float_heap(Float_Heap* heap, int amount) {
+    assert(amount > 0);
+
+    int new_cap = heap->cap + amount;
+    while (heap->cap < new_cap) {
+        heap->cap += heap->cap >> 1;
+        heap->cap++;
+    }
+
+    heap->buckets = mem_realloc(heap->allocator, heap->buckets, sizeof(Float_Heap_Bucket) * heap->cap);
+}
+
+void push_min_float_heap(Float_Heap* heap, f32 value, int index) {
+    if (heap->count + 1 >= heap->cap) reserve_float_heap(heap, 1);
+
+    heap->buckets[++heap->count] = (Float_Heap_Bucket) { value, index };
+    
+    index = heap->count; // this is kind of ew but oh well
+
+    while (heap->buckets[index].value < heap->buckets[heap_parent(index)].value && heap_is_leaf(index, heap->count)) {
+        swap(heap->buckets[index], heap->buckets[heap_parent(index)], Float_Heap_Bucket);
+        index = heap_parent(index);
+    }
+}
+
+void push_max_float_heap(Float_Heap* heap, f32 value, int index) {
+    if (heap->count + 1 >= heap->cap) reserve_float_heap(heap, 1);
+
+    heap->buckets[++heap->count] = (Float_Heap_Bucket) { value, index };
+    
+    index = heap->count; // this is kind of ew but oh well
+
+    while (heap->buckets[index].value > heap->buckets[heap_parent(index)].value) {
+        swap(heap->buckets[index], heap->buckets[heap_parent(index)], Float_Heap_Bucket);
+        index = heap_parent(index);
+    }
+}
+
+static void float_heap_minify(Float_Heap* heap, int index) {
+    if (!heap_is_leaf(index, heap->count)) {
+        if (heap->buckets[index].value > heap->buckets[heap_left_child(index)].value || heap->buckets[index].value > heap->buckets[heap_right_child(index)].value) {
+
+            if (heap->buckets[heap_left_child(index)].value < heap->buckets[heap_right_child(index)].value) {
+                swap(heap->buckets[index], heap->buckets[heap_left_child(index)], Float_Heap_Bucket);
+                float_heap_minify(heap, heap_left_child(index));
+            } else {
+                swap(heap->buckets[index], heap->buckets[heap_right_child(index)], Float_Heap_Bucket);
+                float_heap_minify(heap, heap_right_child(index));
+            }
+        }
+    }
+}
+
+int pop_min_float_heap(Float_Heap* heap) {
+    int result = heap->buckets[1].index;
+    heap->buckets[1] = heap->buckets[heap->count--];
+
+    for (int i = heap->count / 2; i >= 1; --i) {
+        float_heap_minify(heap, i);
+    }
+
+    return result;
+}
+
+static void float_heap_maxify(Float_Heap* heap, int index) {
+    if (!heap_is_leaf(index, heap->count)) {
+        if (heap->buckets[index].value < heap->buckets[heap_left_child(index)].value || heap->buckets[index].value < heap->buckets[heap_right_child(index)].value) {
+
+            if (heap->buckets[heap_left_child(index)].value > heap->buckets[heap_right_child(index)].value) {
+                swap(heap->buckets[index], heap->buckets[heap_left_child(index)], Float_Heap_Bucket);
+                float_heap_minify(heap, heap_left_child(index));
+            } else {
+                swap(heap->buckets[index], heap->buckets[heap_right_child(index)], Float_Heap_Bucket);
+                float_heap_minify(heap, heap_right_child(index));
+            }
+        }
+    }
+}
+
+int pop_max_float_heap(Float_Heap* heap) {
+    int result = heap->buckets[1].index;
+    heap->buckets[1] = heap->buckets[heap->count--];
+
+    for (int i = heap->count / 2; i >= 1; --i) {
+        float_heap_maxify(heap, i);
+    }
+
+    return result;
+}
+
 #define PIXELS_PER_METER 32
 
 typedef struct Game_State {
@@ -252,6 +349,8 @@ DLL_EXPORT void tick_game(f32 dt) {
         game_state->frame_count = 0;
     }
     game_state->frame_count += 1;
+
+    o_log("[Game] Tick with %.2fms", dt * 1000.f);
 
     // Do input handling
     for (int i = 0; i < g_platform->num_events; ++i) {
@@ -445,38 +544,16 @@ DLL_EXPORT void tick_game(f32 dt) {
         Font* font = font_at_size(fc, (int)(25.f * g_platform->dpi_scale));
         set_uniform_texture("atlas", font->atlas);
 
-        char controller_debug_string[256];
-        Controller* controller = find_entity_by_id(em, em->controller_id);
-        if (controller) {
-            Vector2 mouse_location = get_mouse_pos_in_world_space(controller);
-            Tile* tile_under_mouse = find_tile_at(em, (int)mouse_location.x, (int)mouse_location.y, 0);
-
-            if (tile_under_mouse) {
-                const char* type_string = tile_type_names[tile_under_mouse->type];
-                sprintf(
-                    controller_debug_string, 
-                    "%s (%i, %i)", 
-                    type_string, 
-                    (int)mouse_location.x, 
-                    (int)mouse_location.y
-                );
-            }
-            else sprintf(controller_debug_string, "None");
-        }
-
         f64 precise_dt = g_platform->current_frame_time - g_platform->last_frame_time;
 
         char buffer[512];
         sprintf(
             buffer, 
-            "FPS: %i\nFrame Time: %ims\n  Tick Time: %ims\n  Draw Time: %ims\n  Draw Calls: %i\nVertices Drawn: %i\nTile: %s", 
+            "FPS: %i\nFrame Time: %.3fms\n  Tick Time: %.3fms\n  Draw Time: %.3fms", 
             game_state->fps,
-            (int)(precise_dt * 1000.0),
-            (int)(tick_duration * 1000.0),
-            (int)(draw_duration * 1000.0),
-            draw_state->num_draw_calls,
-            draw_state->vertices_drawn,
-            controller != 0 ? controller_debug_string : "None"
+            precise_dt * 1000.0,
+            tick_duration * 1000.0,
+            draw_duration * 1000.0
         );
 
         imm_begin();

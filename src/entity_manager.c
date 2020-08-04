@@ -202,12 +202,26 @@ static u64 hash_generic(void* a, void* b, int size) {
     return fnv1_hash(a, size);
 }
 
-static f32 distance_between_tiles(Tile_Ref a, Tile_Ref b) {
-    return (f32)(abs(b.x - a.x) + abs(b.y - a.y));
+static u64 hash_tile_ref(void* a, void* b, int size) {
+    assert(size == sizeof(Tile_Ref));
 
-    // Vector2 a_xy = v2((f32)a.x, (f32)a.y);
-    // Vector2 b_xy = v2((f32)b.x, (f32)b.y);
-    // return v2_len(v2_sub(a_xy, b_xy));
+    Tile_Ref* a_t = a;
+    
+    if (b) {
+        Tile_Ref* b_t = b;
+
+        return tile_ref_eq(*a_t, *b_t);
+    }
+
+    return fnv1_hash(a, size);
+}
+
+static f32 distance_between_tiles(Tile_Ref a, Tile_Ref b) {
+    // return (f32)(abs(b.x - a.x) + abs(b.y - a.y));
+
+    Vector2 a_xy = v2((f32)a.x, (f32)a.y);
+    Vector2 b_xy = v2((f32)b.x, (f32)b.y);
+    return v2_len(v2_sub(a_xy, b_xy));
 }
 
 static b32 is_tile_walkable(Tile* tile) {
@@ -222,49 +236,37 @@ static b32 is_tile_walkable(Tile* tile) {
 b32 pathfind(Entity_Manager* em, Tile_Ref source, Tile_Ref dest, Path* path) {
     if (tile_ref_eq(source, dest)) return true;
 
-    Hash_Set open = make_hash_set(
-        Tile_Ref,
-        hash_generic, 
-        g_platform->frame_arena
-    );
-    reserve_hash_set(&open, 4096);
-
-    Hash_Set closed = make_hash_set(
-        Tile_Ref, 
-        hash_generic, 
-        g_platform->frame_arena
-    );
-    reserve_hash_set(&closed, 4096);
-
     Hash_Table came_from = make_hash_table(
         Tile_Ref, 
         Path_Tile, 
-        hash_generic, 
-        g_platform->frame_arena
+        hash_tile_ref, 
+        g_platform->permanent_arena
     ); // Key is the tile. Value is the details
-    reserve_hash_table(&came_from, 4096);
-
-    push_hash_set(&open, source);
+    reserve_hash_table(&came_from, 32);
     push_hash_table(&came_from, source, (Path_Tile) { .parent = source });
 
-    while (open.pair_count) {
+    Float_Heap open = make_float_heap(g_platform->frame_arena, 32);
+    push_min_float_heap(&open, 0.f, came_from.pair_count - 1);
+
+    Hash_Set closed = make_hash_set(Tile_Ref, hash_tile_ref, g_platform->frame_arena);
+    reserve_hash_set(&closed, 32);
+
+    f64 time_finding_min = 0.0;
+
+    int neighbors_checked = 0;
+
+    while (open.count) {
+
+        f64 start_time = g_platform->time_in_seconds();
         // Find path tile with lowest f
-
-        Tile_Ref current_ref = (*(Tile_Ref*)key_at_hash_table(&open, 0));
-        Path_Tile* current_tile = find_hash_table(&came_from, current_ref);
-        for (int i = 1; i < open.pair_count; ++i) {
-            Tile_Ref found_ref = (*(Tile_Ref*)key_at_hash_table(&open, i));
-            Path_Tile* found_tile = find_hash_table(&came_from, found_ref);
-
-            if (current_tile->f > found_tile->f) {
-                current_tile = found_tile;
-                current_ref = found_ref;
-            }
-        }
+        int current_index = pop_min_float_heap(&open);
+        Tile_Ref current_ref = (*(Tile_Ref*)key_at_hash_table(&came_from, current_index));
+        Path_Tile current_tile = (*(Path_Tile*)find_hash_table(&came_from, current_ref));
 
         push_hash_set(&closed, current_ref);
-        b32 ok = remove_hash_set(&open, current_ref);
-        assert(ok);
+
+        f64 min_find_duration = g_platform->time_in_seconds() - start_time;
+        time_finding_min += min_find_duration;
 
         for (int i = 0; i < 9; ++i) {
             int y = i / 3;
@@ -273,6 +275,8 @@ b32 pathfind(Entity_Manager* em, Tile_Ref source, Tile_Ref dest, Path* path) {
             x--;
 
             if (x == 0 && y == 0) continue;
+
+            neighbors_checked += 1;
 
             Tile_Ref neighbor_ref = { current_ref.x + x, current_ref.y + y, current_ref.z };
 
@@ -283,12 +287,12 @@ b32 pathfind(Entity_Manager* em, Tile_Ref source, Tile_Ref dest, Path* path) {
                 // Do the path tracing
                 int ref_count = 1;
                 Tile_Ref final_ref = current_ref;
-                Path_Tile* final_tile = current_tile;
+                Path_Tile final_tile = current_tile;
 
-                while(!tile_ref_eq(final_tile->parent, final_ref)) {
+                while(!tile_ref_eq(final_tile.parent, final_ref)) {
                     ref_count += 1;
-                    final_ref = final_tile->parent;
-                    final_tile = find_hash_table(&came_from, final_ref);
+                    final_ref = final_tile.parent;
+                    final_tile = (*(Path_Tile*)find_hash_table(&came_from, final_ref));
                 }
 
                 path->refs = mem_alloc_array(g_platform->permanent_arena, Tile_Ref, ref_count);
@@ -298,12 +302,13 @@ b32 pathfind(Entity_Manager* em, Tile_Ref source, Tile_Ref dest, Path* path) {
                 final_tile = current_tile;
                 path->refs[ref_count - 1] = dest;
 
-                while(!tile_ref_eq(final_tile->parent, final_ref)) {
+                while(!tile_ref_eq(final_tile.parent, final_ref)) {
                     ref_count -= 1;
                     path->refs[ref_count - 1] = final_ref;
-                    final_ref = final_tile->parent;
-                    final_tile = find_hash_table(&came_from, final_ref);
+                    final_ref = final_tile.parent;
+                    final_tile = (*(Path_Tile*)find_hash_table(&came_from, final_ref));
                 }
+                o_log_error("%i neighbors_checked, min find %.2fms", neighbors_checked, time_finding_min * 1000.0);
 
                 return true;
             }
@@ -311,13 +316,7 @@ b32 pathfind(Entity_Manager* em, Tile_Ref source, Tile_Ref dest, Path* path) {
             if (find_hash_set(&closed, neighbor_ref) == 0 && is_tile_walkable(found_tile)) {
                 b32 is_diagonal = (x + y) % 2 == 0;
 
-                if (is_diagonal) {
-                    Tile* tile_a = find_tile_at(em, x, 0, 0);
-                    Tile* tile_b = find_tile_at(em, 0, y, 0);
-                    if (!is_tile_walkable(tile_a) && !is_tile_walkable(tile_b)) continue;
-                }
-
-                f32 g = current_tile->g + (is_diagonal ? 1.44f : 1.f);
+                f32 g = current_tile.g + (is_diagonal ? 1.44f : 1.f);
                 f32 h = distance_between_tiles(neighbor_ref, dest);
                 f32 f = g + h;
 
@@ -330,7 +329,7 @@ b32 pathfind(Entity_Manager* em, Tile_Ref source, Tile_Ref dest, Path* path) {
                     found_path_tile->g = g;
                     found_path_tile->parent = current_ref;
 
-                    push_hash_set(&open, neighbor_ref);
+                    push_min_float_heap(&open, f, index_hash_table(&came_from, neighbor_ref));
                 }
             }
         }

@@ -264,6 +264,8 @@ typedef struct String {
 #define from_cstr(cstr) (String) { (u8*)cstr, (int)str_len(cstr), null_allocator() }
 #define expand_string(str) str.data, str.len 
 
+#define swap(a, b, t) do { t __swap = a; a = b; b = __swap; } while(0)
+
 typedef struct Rune_Iterator {
     String the_string;
 
@@ -342,6 +344,9 @@ b32 _remove_hash_table(Hash_Table* ht, void* key, int key_size);
 void* _find_hash_table(Hash_Table* ht, void* key, int key_size);
 #define find_hash_table(ht, key) _find_hash_table(ht, &key, sizeof(key))
 
+int _index_hash_table(Hash_Table* ht, void* key, int key_size);
+#define index_hash_table(ht, key) _index_hash_table(ht, &key, sizeof(key))
+
 inline void* _find_or_add_zeroed_hash_table(Hash_Table* ht, void* key, int key_size) {
     void* found = _find_hash_table(ht, key, key_size);
     if (!found) found = _push_hash_table(ht, key, key_size, 0, ht->value_size);
@@ -364,5 +369,31 @@ inline void* value_at_hash_table(Hash_Table* ht, int index) {
 #define push_hash_set(hs, key) _push_hash_table(hs, &key, sizeof(key), &key, sizeof(key))
 #define remove_hash_set(hs, key) _remove_hash_table(hs, &key, sizeof(key));
 #define find_hash_set(hs, key) _find_hash_table(hs, &key, sizeof(key))
+
+typedef struct Float_Heap_Bucket {
+    f32 value;
+    int index;
+} Float_Heap_Bucket;
+
+typedef struct Float_Heap {
+    Float_Heap_Bucket* buckets;
+    int count;
+    int cap;
+
+    Allocator allocator;
+} Float_Heap;
+
+Float_Heap make_float_heap(Allocator allocator, int reserve);
+void reserve_float_heap(Float_Heap* heap, int amount);
+void push_min_float_heap(Float_Heap* heap, f32 value, int index);
+void push_max_float_heap(Float_Heap* heap, f32 value, int index);
+int pop_min_float_heap(Float_Heap* heap);
+int pop_max_float_heap(Float_Heap* heap);
+
+
+inline int heap_parent(int index) { return index / 2; }
+inline int heap_left_child(int index) { return index * 2; }
+inline int heap_right_child(int index) { return index * 2 + 1; }
+inline b32 heap_is_leaf(int index, int count) { return index >= count / 2 && index <= count; }
 
 #endif /* LANGUAGE_LAYER_H */
