@@ -404,4 +404,6 @@ inline int heap_left_child(int index) { return index * 2; }
 inline int heap_right_child(int index) { return index * 2 + 1; }
 inline b32 heap_is_leaf(int index, int count) { return index >= count / 2 && index <= count; }
 
+#define defer_loop(begin, end) for(int __i ## __LINE__ = (begin, 0); !__i ## __LINE__; ++__i ## __LINE__, end)
+
 #endif /* LANGUAGE_LAYER_H */

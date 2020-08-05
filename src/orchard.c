@@ -27,6 +27,7 @@
 #include "entity_manager.c"
 #include "controller.c"
 #include "pawn.c"
+#include "gui.c"
 
 Platform* g_platform = 0;
 
@@ -328,6 +329,7 @@ DLL_EXPORT void init_game(Platform* platform) {
     init_opengl(platform);
     init_asset_manager(platform);
     init_draw(platform);
+    init_gui(platform);
     // init_editor(platform);
 
     // Init Game State
@@ -538,6 +540,11 @@ DLL_EXPORT void tick_game(f32 dt) {
     }
     f64 draw_duration = g_platform->time_in_seconds() - before_draw;
 
+    do_gui(dt, viewport) {
+        gui_label_rect(viewport, from_cstr("Hello Sailor"), GTA_Left);
+    }
+
+#if 0
     {
         set_shader(find_shader(from_cstr("assets/shaders/font")));
         draw_right_handed(viewport);
@@ -563,6 +570,7 @@ DLL_EXPORT void tick_game(f32 dt) {
         imm_string(from_cstr(buffer), font, (f32)font->size, 100000.f, v2(0.f, viewport.max.y - 48.f), -4.f, v4s(1.f));
         imm_flush();
     }
+#endif
 
     swap_gl_buffers(g_platform);
 }
