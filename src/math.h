@@ -187,6 +187,9 @@ b32 rect_overlaps_rect(Rect a, Rect b, Rect* overlap);
 b32 rect_overlaps_point(Rect a, Vector2 b);
 inline Rect move_rect(Rect a, Vector2 offset) { return (Rect) { v2_add(a.min, offset), v2_add(a.max, offset) }; }
 
+inline f32 rect_width(Rect a) { return a.max.x - a.min.x; }
+inline f32 rect_height(Rect a) { return a.max.y - a.min.y; }
+
 b32 line_intersect_line(Vector2 a1, Vector2 a2, Vector2 b1, Vector2 b2, Vector2* intersection);
 
 typedef struct Rect_Intersect_Result {

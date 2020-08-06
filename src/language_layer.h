@@ -272,6 +272,11 @@ typedef struct String {
 #define from_cstr(cstr) (String) { (u8*)cstr, (int)str_len(cstr), null_allocator() }
 #define expand_string(str) str.data, str.len 
 
+inline void free_string(String* s) {
+    mem_free(s->allocator, s->data);
+    *s = (String) { 0 };
+}
+
 #define swap(a, b, t) do { t __swap = a; a = b; b = __swap; } while(0)
 
 typedef struct Rune_Iterator {
@@ -296,6 +301,22 @@ int find_from_left(String the_string, Rune r);
 b32 string_equal(String a, String b);
 String copy_string(String a, Allocator allocator);
 b32 starts_with(String a, String b);
+
+typedef struct Builder {
+    u8* data;
+    int count;
+    int cap;
+
+    Allocator allocator;
+} Builder;
+
+Builder make_builder(Allocator allocator, int reserve);
+void reserve_builder(Builder* builder, int amount);
+
+int printf_builder(Builder* builder, const char* fmt, ...);
+int vprintf_builder(Builder* builder, const char* fmt, va_list args);
+
+inline String builder_to_string(Builder builder) { return (String) { builder.data, builder.count, builder.allocator }; }
 
 #define FNV_OFFSET_BASIC 0xcbf29ce484222325
 #define FNV_PRIME 0x100000001b3
@@ -397,7 +418,6 @@ void push_min_float_heap(Float_Heap* heap, f32 value, int index);
 void push_max_float_heap(Float_Heap* heap, f32 value, int index);
 int pop_min_float_heap(Float_Heap* heap);
 int pop_max_float_heap(Float_Heap* heap);
-
 
 inline int heap_parent(int index) { return index / 2; }
 inline int heap_left_child(int index) { return index * 2; }

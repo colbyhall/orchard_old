@@ -188,6 +188,44 @@ u64 hash_string(void* a, void* b, int size) {
     return fnv1_hash(s_a->data, s_a->len);
 }
 
+Builder make_builder(Allocator allocator, int reserve) {
+    Builder result = { .allocator = allocator };
+    reserve_builder(&result, reserve);
+    return result;
+}
+
+void reserve_builder(Builder* builder, int amount) {
+    int new_cap = builder->cap + amount;
+    while (builder->cap < new_cap) {
+        builder->cap += builder->cap >> 1;
+        builder->cap++;
+    }
+
+    builder->data = mem_realloc(builder->allocator, builder->data, builder->cap);
+}
+
+int printf_builder(Builder* builder, const char* fmt, ...) {
+    va_list args;
+    va_start(args, fmt);
+    int result = vprintf_builder(builder, fmt, args);
+    va_end(args);
+    return result;
+}
+
+int vprintf_builder(Builder* builder, const char* fmt, va_list args) {
+    va_list copy_args = 0;
+    va_copy(copy_args, args);
+    int count = vsnprintf(0, 0, fmt, copy_args);
+    va_end(copy_args);
+
+    int needs = (builder->count + count) - builder->cap;
+    if (needs) reserve_builder(builder, needs);
+
+    int result = vsprintf((char*)builder->data + builder->count, fmt, args);
+    builder->count += result;
+    return result;
+}
+
 static void regen_map(Entity_Manager* em, Random_Seed seed) {
     o_log("[Game] Generating map with seed %llu", seed.seed);
 
@@ -368,7 +406,7 @@ DLL_EXPORT void tick_game(f32 dt) {
     }
 
     Entity_Manager* em = game_state->entity_manager;
-    Rect viewport = { v2z(), v2((f32)g_platform->window_width, (f32)g_platform->window_height) };
+    Rect viewport = viewport_rect();
 
     f64 before_tick = g_platform->time_in_seconds();
     // Tick the game state
@@ -540,37 +578,19 @@ DLL_EXPORT void tick_game(f32 dt) {
     }
     f64 draw_duration = g_platform->time_in_seconds() - before_draw;
 
-    do_gui(dt, viewport) {
-        gui_label_rect(viewport, from_cstr("Hello Sailor"), GTA_Left);
+    do_gui(dt) {
+        gui_row_layout_rect(gui_id_from_ptr("f"), viewport, true) {
+            printf_gui_label(GTA_Left, "FPS: %i", game_state->fps);
+
+            f64 precise_dt = g_platform->current_frame_time - g_platform->last_frame_time;
+            printf_gui_label(GTA_Left, "Frame Time: %.3fms", precise_dt * 1000.0);
+
+            printf_gui_label(GTA_Left, " Tick Time: %.3fms", tick_duration * 1000.0);
+            printf_gui_label(GTA_Left, " Draw Time: %.3fms", draw_duration * 1000.0);
+
+            printf_gui_label(GTA_Left, "Build: %s", DEBUG_BUILD ? "Debug" : "Release");
+        }
     }
-
-#if 0
-    {
-        set_shader(find_shader(from_cstr("assets/shaders/font")));
-        draw_right_handed(viewport);
-
-        Font_Collection* fc = find_font_collection(from_cstr("assets/fonts/Menlo-Regular"));
-        Font* font = font_at_size(fc, (int)(25.f * g_platform->dpi_scale));
-        set_uniform_texture("atlas", font->atlas);
-
-        f64 precise_dt = g_platform->current_frame_time - g_platform->last_frame_time;
-
-        char buffer[512];
-        sprintf(
-            buffer, 
-            "FPS: %i\nFrame Time: %.3fms\n  Tick Time: %.3fms\n  Draw Time: %.3fms\nBuild: %s", 
-            game_state->fps,
-            precise_dt * 1000.0,
-            tick_duration * 1000.0,
-            draw_duration * 1000.0,
-            DEBUG_BUILD ? "Debug" : "Release"
-        );
-
-        imm_begin();
-        imm_string(from_cstr(buffer), font, (f32)font->size, 100000.f, v2(0.f, viewport.max.y - 48.f), -4.f, v4s(1.f));
-        imm_flush();
-    }
-#endif
 
     swap_gl_buffers(g_platform);
 }

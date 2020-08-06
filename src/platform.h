@@ -3,6 +3,7 @@
 
 #include "language_layer.h"
 #include "input.h"
+#include "math.h"
 
 enum File_Flags {
     FF_Read     = (1 << 0),
@@ -166,5 +167,7 @@ inline b32 was_key_released(u8 key) { return !g_platform->input.state.keys_down[
 inline b32 is_mouse_button_pressed(u8 mouse_button) { return g_platform->input.state.mouse_buttons_down[mouse_button]; }
 inline b32 was_mouse_button_pressed(u8 mouse_button) { return g_platform->input.state.mouse_buttons_down[mouse_button] && !g_platform->input.prev_state.mouse_buttons_down[mouse_button]; }
 inline b32 was_mouse_button_released(u8 mouse_button) { return !g_platform->input.state.mouse_buttons_down[mouse_button] && g_platform->input.prev_state.mouse_buttons_down[mouse_button]; }
+
+inline Rect viewport_rect(void) { return (Rect) { v2z(), v2((f32)g_platform->window_width, (f32)g_platform->window_height) }; }
 
 #endif /* PLATFORM_H */

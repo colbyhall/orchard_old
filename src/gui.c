@@ -5,11 +5,10 @@ typedef union GUI_Id {
     u64 whole;
 } GUI_Id;
 
-static GUI_Id gui_id_from_ptr(void* ptr) { return (GUI_Id) { .whole = (u64)ptr, }; }
-static GUI_Id gui_id_from_ptr_index(void* ptr, int index) { 
+GUI_Id gui_id_from_ptr(void* ptr) { return (GUI_Id) { .whole = (u64)ptr, }; }
+GUI_Id gui_id_from_ptr_index(void* ptr, int index) { 
     GUI_Id id;
-    id.item = (int)((u64)ptr);
-    id.index = index;
+    id.whole = (u64)ptr;
     return id;
 }
 
@@ -125,8 +124,11 @@ void begin_gui(void) {
     gui_state->focus_was_set = false;
 }
 
-void end_gui(f32 dt, Rect viewport) {
+void end_gui(f32 dt) {
     set_shader(find_shader(from_cstr("assets/shaders/font")));
+    
+    Rect viewport = { v2z(), v2((f32)g_platform->window_width, (f32)g_platform->window_height) };
+
     draw_right_handed(viewport);
 
     Font_Collection* fc = find_font_collection(from_cstr("assets/fonts/Menlo-Regular"));
@@ -141,6 +143,7 @@ void end_gui(f32 dt, Rect viewport) {
 
         switch (widget.type) {
         case GWT_Label: 
+            // @TODO(colby): Alignment
             imm_string(
                 widget.label, 
                 font, (f32)font->size, 
@@ -158,9 +161,70 @@ void end_gui(f32 dt, Rect viewport) {
     gui_state->widget_count = 0;
 }
 
-#define do_gui(dt, viewport) defer_loop(begin_gui, end_gui(dt, viewport))
+#define do_gui(dt) defer_loop(begin_gui, end_gui(dt))
+#define push_widget(widget) assert(gui_state->widget_count < GUI_WIDGET_CAP); gui_state->widgets[gui_state->widget_count++] = widget
+#define push_layout(layout) assert(gui_state->layout_count < GUI_WIDGET_CAP); gui_state->layouts[gui_state->layout_count++] = layout
 
-void gui_label_rect(Rect rect, String label, GUI_Text_Alignment alignment) {
+b32 gui_pop_layout(GUI_Layout* out) {
+    if (!gui_state->layout_count) return 0;
+
+    gui_state->layout_count -= 1;
+    if (out) *out = gui_state->layouts[gui_state->layout_count];
+    return 1;
+}
+
+void gui_push_row_layout_rect(GUI_Id id, Rect rect, b32 going_down) {
+    f32 current = going_down ? rect.max.y : rect.min.y;
+
+    GUI_Layout the_layout = {
+        .id       = id,
+        .bounds   = rect,
+        .current  = current,
+        .is_col   = false,
+        .reversed = !going_down,
+    };
+    push_layout(the_layout);
+}
+
+#define gui_row_layout_rect(id, rect, going_down) defer_loop(gui_push_row_layout_rect(id, rect, going_down), gui_pop_layout(0))
+
+static GUI_Layout* last_layout(void) {
+    assert(gui_state->layout_count);
+    return &gui_state->layouts[gui_state->layout_count - 1];
+}
+
+static Rect rect_from_layout(GUI_Layout* layout, f32 size) {
+    if (layout->is_col) {
+        invalid_code_path; // @TODO(colby): Implement this
+    } else {
+        if (layout->reversed) {
+            Vector2 bot_left  = v2(layout->bounds.min.x, layout->current);
+            Vector2 top_right = v2_add(bot_left, v2(rect_width(layout->bounds), size));
+            layout->current  += size;
+            return (Rect) { bot_left, top_right };
+        } else {
+            Vector2 top_right = v2(layout->bounds.max.x, layout->current);
+            Vector2 bot_left  = v2_sub(top_right, v2(rect_width(layout->bounds), size));
+            layout->current  -= size;
+            return (Rect) { bot_left, top_right };
+        }
+    }
+
+    return (Rect) { 0 };
+}
+
+static f32 layout_space_left(GUI_Layout* layout) {
+    if (layout->is_col) {
+        invalid_code_path; // @TODO(colby): Implement this
+    } else {
+        if (layout->reversed) return layout->bounds.max.y - layout->current;
+        else return layout->current - layout->bounds.min.y;
+    }
+
+    return 0.f;
+}
+
+void gui_label_rect(Rect rect, GUI_Text_Alignment alignment, String label) {
     GUI_Widget the_widget = {
         .bounds    = rect,
         .type      = GWT_Label,
@@ -169,6 +233,45 @@ void gui_label_rect(Rect rect, String label, GUI_Text_Alignment alignment) {
         .color     = gui_state->label_color,
     };
 
-    gui_state->widgets[gui_state->widget_count++] = the_widget;
+    push_widget(the_widget);
 }
 
+void printf_gui_label_rect(Rect rect, GUI_Text_Alignment alignment, const char* fmt, ...) {
+    Builder builder = make_builder(g_platform->frame_arena, 0);
+    
+    va_list args;
+    va_start(args, fmt);
+    vprintf_builder(&builder, fmt, args);
+    va_end(args);
+
+    String label = builder_to_string(builder);
+
+    GUI_Widget the_widget = {
+        .bounds    = rect,
+        .type      = GWT_Label,
+        .label     = label,
+        .alignment = alignment,
+        .color     = gui_state->label_color,
+    };
+
+    push_widget(the_widget);
+}
+
+void gui_label(GUI_Text_Alignment alignment, String label) {
+    GUI_Layout* layout = last_layout();
+
+    Rect rect = rect_from_layout(layout, 56.f);
+    gui_label_rect(rect, alignment, label);
+}
+
+void printf_gui_label(GUI_Text_Alignment alignment, const char* fmt, ...) {
+    Builder builder = make_builder(g_platform->frame_arena, 0);
+    
+    va_list args;
+    va_start(args, fmt);
+    vprintf_builder(&builder, fmt, args);
+    va_end(args);
+
+    String label = builder_to_string(builder);
+    gui_label(alignment, label); // @HACK: This does a copy
+}
