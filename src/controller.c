@@ -1,5 +1,6 @@
 #include "controller.h"
 #include "pawn.h"
+#include "gui.h"
 
 Controller* make_controller(Entity_Manager* em, Vector2 location, f32 ortho_size) {
     Controller* result = make_entity(em, Controller);
@@ -38,6 +39,7 @@ static void tick_controller(Entity_Manager* em, Entity* entity, f32 dt) {
     assert(entity->type == ET_Controller);
     Controller* controller = entity->derived;
 
+
     f32 mouse_wheel_delta = (f32)g_platform->input.state.mouse_wheel_delta / 50.f;
     controller->target_ortho_size -= mouse_wheel_delta;
     controller->target_ortho_size = CLAMP(controller->target_ortho_size, MIN_CAMERA_ORTHO_SIZE, MAX_CAMERA_ORTHO_SIZE);
@@ -52,6 +54,8 @@ static void tick_controller(Entity_Manager* em, Entity* entity, f32 dt) {
     Vector2 delta_mouse_pos_in_world = v2_sub(old_mouse_pos_in_world, mouse_pos_in_world);
     if (delta_ortho_size != 0.f) controller->location = v2_add(controller->location, delta_mouse_pos_in_world);
 
+    if (is_hovering_widget()) return;
+    
     f32 ratio = (controller->current_ortho_size * 2.f) / (f32)g_platform->window_height;
 
     if (g_platform->input.state.mouse_buttons_down[MOUSE_MIDDLE]) {

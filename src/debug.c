@@ -1,5 +1,5 @@
 #include "debug.h"
-#include "draw.h"
+#include "gui.h"
 
 typedef struct Logger {
     File_Handle file;
@@ -70,4 +70,17 @@ void shutdown_logger(void) {
     g_platform->close_file(&logger->file);
 }
 
+Debug_State* g_debug_state = 0;
 
+void init_debug(Platform* platform) {
+    g_debug_state = mem_alloc_struct(platform->permanent_arena, Debug_State);
+
+    if (g_debug_state->is_initialized) return;
+}
+
+void do_debug_ui(void) {
+    gui_col_layout_size(24.f * g_platform->dpi_scale, true) {
+        printf_gui_label("Show Pathfind Debug");
+        gui_checkbox(gui_id_from_ptr_index(g_debug_state, 0), &g_debug_state->draw_pathfinding);
+    }
+}

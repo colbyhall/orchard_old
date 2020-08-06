@@ -27,7 +27,7 @@ static void draw_pawn(Entity_Manager* em, Entity* entity) {
     Pawn* pawn = entity->derived;
 
 #if DEBUG_BUILD
-    draw_pathfind_debug(em, pawn->path);
+    if (g_debug_state->draw_pathfinding) draw_pathfind_debug(em, pawn->path);
 #endif
 
     set_shader(find_shader(from_cstr("assets/shaders/basic2d")));

@@ -116,6 +116,7 @@ Font* font_at_size(Font_Collection* collection, int size) {
     f->size = size;
     f->info = &collection->info;
     f->glyph_count = collection->codepoint_count;
+    f->owner = collection;
 
     f32 font_scale = stbtt_ScaleForPixelHeight(&collection->info, (f32)size);
     f->ascent   = (f32)ascent * font_scale;
@@ -524,6 +525,45 @@ void imm_string(String str, Font* font, f32 size, f32 max_width, Vector2 xy, f32
         } break;
         }
     }
+}
+
+Rect font_string_rect(String str, Font* font, f32 max_width) {
+    f32 width = 0.f;
+    f32 height = (f32)font->size;
+
+    Vector2 xy = v2z();
+    Vector2 orig_xy = xy;
+
+    Font_Glyph* space_g = glyph_from_rune(font, ' ');
+    for (int i = 0; i < str.len; ++i) {
+        if (xy.x + space_g->advance > orig_xy.x + max_width) {
+            xy.x = orig_xy.x ;
+            xy.y += (f32)font->size;
+        }
+
+        char c = str.data[i]; // @TODO(colby): UTF8
+        switch (c) {
+        case '\n': {
+            xy.x = orig_xy.x;
+            xy.y += (f32)font->size;
+        } break;
+        case '\r': {
+            xy.x = orig_xy.x;
+        } break;
+        case '\t': {
+            xy.x += space_g->advance * 4.f;
+        } break;
+        default: {
+            Font_Glyph* g = glyph_from_rune(font, c);
+            if (g) xy.x += g->advance;
+        } break;
+        }
+
+        if (xy.x > width) width = xy.x;
+        if (xy.y > height) height = xy.y;
+    }
+
+    return (Rect) { v2z(), v2(width, height) };
 }
 
 void imm_textured_plane(Vector3 pos, Quaternion rot, Rect rect, Vector2 uv0, Vector2 uv1, Vector4 color) {

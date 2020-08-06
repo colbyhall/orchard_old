@@ -182,6 +182,10 @@ inline Rect rect_from_points(Vector2 p0, Vector2 p1) {
     };
 }
 inline Vector2 rect_size(Rect a) { return v2_sub(a.max, a.min); }
+inline Vector2 rect_pos(Rect a) {
+    Vector2 size = rect_size(a);
+    return v2_add(a.min, v2_div(size, v2s(2.f)));
+}
 
 b32 rect_overlaps_rect(Rect a, Rect b, Rect* overlap);
 b32 rect_overlaps_point(Rect a, Vector2 b);

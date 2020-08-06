@@ -368,7 +368,7 @@ DLL_EXPORT void init_game(Platform* platform) {
     init_asset_manager(platform);
     init_draw(platform);
     init_gui(platform);
-    // init_editor(platform);
+    init_debug(platform);
 
     // Init Game State
     game_state = mem_alloc_struct(platform->permanent_arena, Game_State);
@@ -579,16 +579,19 @@ DLL_EXPORT void tick_game(f32 dt) {
     f64 draw_duration = g_platform->time_in_seconds() - before_draw;
 
     do_gui(dt) {
-        gui_row_layout_rect(gui_id_from_ptr("f"), viewport, true) {
-            printf_gui_label(GTA_Left, "FPS: %i", game_state->fps);
+        gui_row_layout_rect(viewport, true) {
+            printf_gui_label("FPS: %i", game_state->fps);
 
             f64 precise_dt = g_platform->current_frame_time - g_platform->last_frame_time;
-            printf_gui_label(GTA_Left, "Frame Time: %.3fms", precise_dt * 1000.0);
+            printf_gui_label("Frame Time: %.3fms", precise_dt * 1000.0);
 
-            printf_gui_label(GTA_Left, " Tick Time: %.3fms", tick_duration * 1000.0);
-            printf_gui_label(GTA_Left, " Draw Time: %.3fms", draw_duration * 1000.0);
+            printf_gui_label(" Tick Time: %.3fms", tick_duration * 1000.0);
+            printf_gui_label(" Draw Time: %.3fms", draw_duration * 1000.0);
+            printf_gui_label("  GUI Time: %.3fms", gui_state->last_duration * 1000.0);
 
-            printf_gui_label(GTA_Left, "Build: %s", DEBUG_BUILD ? "Debug" : "Release");
+            printf_gui_label("Build: %s", DEBUG_BUILD ? "Debug" : "Release");
+            printf_gui_label(" ");
+            do_debug_ui();
         }
     }
 

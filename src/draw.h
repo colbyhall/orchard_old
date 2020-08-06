@@ -34,6 +34,8 @@ typedef struct Font_Glyph {
     Vector2 uv0, uv1;
 } Font_Glyph;
 
+struct Font_Collection;
+
 typedef struct Font {
     int size;
     f32 ascent, descent, line_gap;
@@ -43,6 +45,7 @@ typedef struct Font {
 
     Texture2d atlas;
     stbtt_fontinfo* info; // @HACK(colby): This really sucks
+    struct Font_Collection* owner;
 } Font;
 
 #define FONT_CAP 32
@@ -57,6 +60,8 @@ typedef struct Font_Collection {
 
     Allocator asset_memory;
 } Font_Collection;
+
+Rect font_string_rect(String str, Font* font, f32 max_width);
 
 b32 init_font_collection(u8* data, int len, Allocator asset_memory, Font_Collection* collection);
 Font* font_at_size(Font_Collection* collection, int size);
@@ -87,6 +92,7 @@ void imm_arrow(Vector2 a1, Vector2 a2, f32 z, f32 thickness, Vector4 color);
 void imm_glyph(Font_Glyph* g, Font* font, f32 size, Vector2 xy, f32 z, Vector4 color);
 Font_Glyph* imm_rune(Rune r, Font* font, f32 size, Vector2 xy, f32 z, Vector4 color);
 void imm_string(String str, Font* font, f32 size, f32 max_width, Vector2 xy, f32 z, Vector4 color);
+inline void imm_string_2d(String str, Font* font, f32 max_width, Vector2 xy, f32 z, Vector4 color) { imm_string(str, font, (f32)font->size, max_width, xy, z, color); }
 
 void imm_textured_plane(Vector3 pos, Quaternion rot, Rect rect, Vector2 uv0, Vector2 uv1, Vector4 color);
 inline void imm_plane(Vector3 pos, Quaternion rot, Rect rect, Vector4 color) { imm_textured_plane(pos, rot, rect, v2s(-1.f), v2s(-1.f), color); }
