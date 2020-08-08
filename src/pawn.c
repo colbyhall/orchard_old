@@ -61,6 +61,6 @@ static void draw_pawn(Entity_Manager* em, Entity* entity) {
         }
     }
 
-    imm_rect(draw_rect, -4.f, v4(1.f, 0.f, 0.2f, 1.f));
+    imm_rect(draw_rect, -3.f, v4(1.f, 0.f, 0.2f, 1.f));
     imm_flush();
 }
