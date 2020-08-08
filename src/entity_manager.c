@@ -398,7 +398,7 @@ b32 pathfind(Entity_Manager* em, Tile_Ref source, Tile_Ref dest, Path* path) {
 
             int neighbor_index = tile_ref_to_index(neighbor_ref);
 
-            b32 is_diagonal = i > array_count(neighbor_map) / 4;
+            b32 is_diagonal = i >= array_count(neighbor_map) / 4;
             b32 is_passable = path_tile->is_passable;
             if (is_diagonal && is_passable) {
                 Tile_Ref a_ref = { current_ref.x + x, current_ref.y };
