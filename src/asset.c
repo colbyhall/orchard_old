@@ -149,7 +149,7 @@ static b32 load_mesh(Asset* asset, String file, Allocator asset_memory) {
 
 #define ASSET_CAP 1024 // This can be increased if needed
 #define PATH_MEMORY_CAP (ASSET_CAP * 1024) // Rough Estimate
-#define ASSET_MEMORY_CAP gigabyte(2)
+#define ASSET_MEMORY_CAP gigabyte(1)
 typedef struct Asset_Manager {
     Asset assets[ASSET_CAP];
     int asset_count;

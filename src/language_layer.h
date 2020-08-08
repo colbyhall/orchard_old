@@ -248,6 +248,8 @@ Allocator pool_allocator(Allocator allocator, int bucket_count, int bucket_size)
 
 typedef u32 Rune;
 
+int rune_size(Rune r);
+
 inline b32 is_whitespace(Rune r) { 
     if (r < 0x2000) return (r >= '\t' && r <= '\r') || r == ' ';
 
@@ -315,6 +317,8 @@ void reserve_builder(Builder* builder, int amount);
 
 int printf_builder(Builder* builder, const char* fmt, ...);
 int vprintf_builder(Builder* builder, const char* fmt, va_list args);
+
+void bytes_to_string_builder(Builder* builder, usize num_bytes);
 
 inline String builder_to_string(Builder builder) { return (String) { builder.data, builder.count, builder.allocator }; }
 

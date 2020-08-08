@@ -226,6 +226,34 @@ int vprintf_builder(Builder* builder, const char* fmt, va_list args) {
     return result;
 }
 
+void bytes_to_string_builder(Builder* builder, usize num_bytes) {
+    // This is bad but who cares
+    if (num_bytes / 1024 > 0) {
+        usize num_kb = num_bytes / 1024;
+
+        if (num_kb / 1024 > 0) {
+            usize num_mb = num_kb / 1024;
+
+            if (num_mb / 1024 > 0) {
+                usize num_gb = num_mb / 1024;
+                usize mb_left = num_mb - num_gb * 1024;
+
+                printf_builder(builder, "%.3fgb", mb_left / 1024.0 + num_gb);
+            } else {
+                usize kb_left = num_kb - num_mb * 1024;
+
+                printf_builder(builder, "%.3fmb", kb_left / 1024.0 + num_mb);
+            }
+        } else {
+            usize bytes_left = num_bytes - num_kb * 1024;
+
+            printf_builder(builder, "%.3fkb", bytes_left / 1024.0 + num_kb);
+        }
+    } else {
+        printf_builder(builder, "%llub", num_bytes);
+    }
+}
+
 Float_Heap make_float_heap(Allocator allocator, int reserve) {
     Float_Heap result = { .allocator = allocator };
     reserve_float_heap(&result, reserve + 1);
@@ -573,6 +601,16 @@ DLL_EXPORT void tick_game(f32 dt) {
             gui_label_printf("        Vertices Drawn: %i", draw_state->vertices_drawn);
             gui_label_printf("        GPU Time: %.3fms", draw_state->draw_call_duration * 1000.0);
             gui_label_printf("    GUI Time: %.3fms", gui_state->last_duration * 1000.0);
+
+            gui_label_printf(" ");
+
+            Memory_Arena* permanent_arena = g_platform->permanent_arena.data;
+            Builder builder = make_builder(g_platform->frame_arena, 512);
+            printf_builder(&builder, "Permanent Arena: ");
+            bytes_to_string_builder(&builder, permanent_arena->used);
+            printf_builder(&builder, "/");
+            bytes_to_string_builder(&builder, permanent_arena->total);
+            gui_label(builder_to_string(builder));
 
             gui_label_printf(" ");
 

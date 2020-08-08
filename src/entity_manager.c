@@ -265,7 +265,7 @@ static Path_Tile* set_path_tile(Path_Map* map, Tile_Ref ref, b32 is_passable) {
     tile->is_initialized = true;
     tile->parent = ref;
     tile->is_passable = is_passable;
-    tile->f = 1000000000000.f;
+    tile->f = 1000000000.f;
 
 #if DEBUG_BUILD
     tile->times_touched += 1;
@@ -281,7 +281,10 @@ inline Tile_Ref tile_ref_from_index(int index) {
     return (Tile_Ref) { x, y };
 }
 
-// @TODO(colby): Looser heuristic function that sacrifices smallest path for speed
+// @TODO: There are still a number of optimizations we can make here
+//  1. Path map should probably be made of chunks to save memory and lower intialization time
+//  2. Jump point search needs to be implemented
+//  3. Looser heuristic function that sacrifices smallest path for speed
 b32 pathfind(Entity_Manager* em, Tile_Ref source, Tile_Ref dest, Path* path) {
     if (tile_ref_eq(source, dest)) return true;
 

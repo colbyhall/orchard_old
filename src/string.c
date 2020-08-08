@@ -35,6 +35,17 @@ static void utf8_decode(u32* state, u32* rune, u32 byte) {
     *state = utf8d[256 + *state + type];
 }
 
+#define SURROGATE_MIN 0xD800
+#define SURROGATE_MAX 0xDFFF
+
+int rune_size(Rune r) {
+    if (r <= (1 << 7) - 1) return 1;
+    if (r <= (1 << 11) - 1) return 2;
+    if (SURROGATE_MIN <= r && r <= SURROGATE_MAX) return -1;
+    if (r <= (1 << 16) - 1) return 3;    
+    return 4;
+}
+
 Rune_Iterator make_rune_iterator(String the_string) {
     return (Rune_Iterator) {
         the_string,
