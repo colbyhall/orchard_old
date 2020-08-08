@@ -3,9 +3,10 @@ A prototype "game" in the works. Could become a game. Leaving public for code ex
 
 ## Features
 * OpenGL Abstraction
-* Deferred Renderer
 * Hot code reload
 * Written from scratch
+* Fast A* implementation
+* Imgui library
 
 ## Dependencies
 * C Runtime
