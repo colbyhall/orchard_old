@@ -281,11 +281,7 @@ inline Tile_Ref tile_ref_from_index(int index) {
     return (Tile_Ref) { x, y };
 }
 
-// There are some optimizations i want to do here.
-//
-// 1. Store Path_Tile similar to how we store tiles in the entity manager. We'll have chunks that we can easily look into 
-// 2. Path_Tile needs to store if the tile is traversable. The goal is to get down the number of times we check tiles from the entity manager as that can be very expensive
-// 3. Looser heuristic function that sacrifices smallest path for speed
+// @TODO(colby): Looser heuristic function that sacrifices smallest path for speed
 b32 pathfind(Entity_Manager* em, Tile_Ref source, Tile_Ref dest, Path* path) {
     if (tile_ref_eq(source, dest)) return true;
 
