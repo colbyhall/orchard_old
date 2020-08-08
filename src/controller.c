@@ -103,7 +103,7 @@ static void tick_controller(Entity_Manager* em, Entity* entity, f32 dt) {
                         &pawn->path
                     );
                     f64 duration = g_platform->time_in_seconds() - start;
-                    o_log_error("[Game] Took %.3fms to do pathfinding", duration * 1000.f);
+                   //  o_log_error("[Game] Took %.3fms to do pathfinding", duration * 1000.f);
                 }
             }
         }

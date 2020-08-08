@@ -461,7 +461,6 @@ DLL_EXPORT void tick_game(f32 dt) {
             Rect viewport_in_world_space = get_viewport_in_world_space(controller);
             
             // Draw tile in a single batch
-            imm_begin();
             for (int i = 0; i < WORLD_SIZE * WORLD_SIZE; ++i) {
                 Chunk* chunk = &em->chunks[i];
                 
@@ -471,6 +470,7 @@ DLL_EXPORT void tick_game(f32 dt) {
 
                 if (!rect_overlaps_rect(viewport_in_world_space, chunk_rect, 0)) continue;
 
+                imm_begin();
                 Vector2 pos = v2((f32)(chunk->x * CHUNK_SIZE), (f32)(chunk->y * CHUNK_SIZE));
                 for (int x = 0; x < CHUNK_SIZE; ++x) {
                     for (int y = 0; y < CHUNK_SIZE; ++y) {
@@ -481,6 +481,7 @@ DLL_EXPORT void tick_game(f32 dt) {
                         Rect trect = { tmin, tmax };
                         f32 tile_z = -5.f;
 
+                        // if (rect_overlaps_rect(viewport_in_world_space, trect)) continue;
                         if (tile->content == TC_Wall) continue;
 
                         int sprites_per_row = terrain->width / PIXELS_PER_METER;
@@ -508,12 +509,11 @@ DLL_EXPORT void tick_game(f32 dt) {
 
                     }
                 }
+                imm_flush();
             }
-            imm_flush();
 
             Texture2d* walls = find_texture2d(from_cstr("assets/sprites/walls"));
             set_uniform_texture("diffuse", *walls);
-            imm_begin();
             for (int i = 0; i < WORLD_SIZE * WORLD_SIZE; ++i) {
                 Chunk* chunk = &em->chunks[i];
                 
@@ -523,6 +523,7 @@ DLL_EXPORT void tick_game(f32 dt) {
 
                 if (!rect_overlaps_rect(viewport_in_world_space, chunk_rect, 0)) continue;
 
+                imm_begin();
                 Vector2 pos = v2((f32)(chunk->x * CHUNK_SIZE), (f32)(chunk->y * CHUNK_SIZE));
                 for (int x = 0; x < CHUNK_SIZE; ++x) {
                     for (int y = 0; y < CHUNK_SIZE; ++y) {
@@ -534,7 +535,7 @@ DLL_EXPORT void tick_game(f32 dt) {
                         f32 wall_z = -4.f;
 
                         if (tile->content != TC_Wall) continue;
-                        if (!rect_overlaps_rect(viewport_in_world_space, trect, 0)) continue;
+                        // if (!rect_overlaps_rect(viewport_in_world_space, trect, 0)) continue;
 
                         int sprite_y = 0;
                         int sprite_x = tile->wall.visual;
@@ -549,8 +550,8 @@ DLL_EXPORT void tick_game(f32 dt) {
                         imm_textured_rect(trect, wall_z, uv0, uv1, v4s(1.f)); 
                     }
                 }
+                imm_flush();
             }
-            imm_flush();
 
             if (controller->selection.valid) {
                 Rect selection = rect_from_points(controller->selection.start, controller->selection.current);

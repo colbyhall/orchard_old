@@ -365,6 +365,7 @@ b32 pathfind(Entity_Manager* em, Tile_Ref source, Tile_Ref dest, Path* path) {
                 final_tile = *find_path_tile(&path_map, final_ref);
             }
 
+#if 0
             o_log(
                 "[Pathfinding] spent %.3fms doing min lookup. wasted %.3fms. checked %i tiles, time doing neighbor %.3fms", 
                 time_doing_min * 1000.0, 
@@ -372,6 +373,7 @@ b32 pathfind(Entity_Manager* em, Tile_Ref source, Tile_Ref dest, Path* path) {
                 tiles_checked, 
                 time_doing_neighbor * 1000.0
             );
+#endif
 
             return true;
         }
@@ -421,7 +423,7 @@ b32 pathfind(Entity_Manager* em, Tile_Ref source, Tile_Ref dest, Path* path) {
             }
 
             // Do the math!
-            f32 g = current_tile.g + (is_diagonal ? 1.4f : 1.f);
+            f32 g = current_tile.g + (is_diagonal ? 1.41f : 1.f);
             f32 h = pathfind_heuristic(neighbor_ref, dest);
             f32 f = g + h;
 
