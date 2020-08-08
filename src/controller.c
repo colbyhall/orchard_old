@@ -39,7 +39,6 @@ static void tick_controller(Entity_Manager* em, Entity* entity, f32 dt) {
     assert(entity->type == ET_Controller);
     Controller* controller = entity->derived;
 
-
     f32 mouse_wheel_delta = (f32)g_platform->input.state.mouse_wheel_delta / 50.f;
     controller->target_ortho_size -= mouse_wheel_delta;
     controller->target_ortho_size = CLAMP(controller->target_ortho_size, MIN_CAMERA_ORTHO_SIZE, MAX_CAMERA_ORTHO_SIZE);
@@ -54,9 +53,17 @@ static void tick_controller(Entity_Manager* em, Entity* entity, f32 dt) {
     Vector2 delta_mouse_pos_in_world = v2_sub(old_mouse_pos_in_world, mouse_pos_in_world);
     if (delta_ortho_size != 0.f) controller->location = v2_add(controller->location, delta_mouse_pos_in_world);
 
+    f32 ratio = (controller->current_ortho_size * 2.f) / (f32)g_platform->window_height;
+    f32 controller_move_speed = 500.f;
+
+    if (is_key_pressed(KEY_W) || is_key_pressed(KEY_UP))   controller->location.y += controller_move_speed * dt * ratio;
+    if (is_key_pressed(KEY_S) || is_key_pressed(KEY_DOWN)) controller->location.y -= controller_move_speed * dt * ratio;
+
+    if (is_key_pressed(KEY_D) || is_key_pressed(KEY_RIGHT)) controller->location.x += controller_move_speed * dt * ratio;
+    if (is_key_pressed(KEY_A) || is_key_pressed(KEY_LEFT))  controller->location.x -= controller_move_speed * dt * ratio;
+
     if (is_hovering_widget()) return;
     
-    f32 ratio = (controller->current_ortho_size * 2.f) / (f32)g_platform->window_height;
 
     if (g_platform->input.state.mouse_buttons_down[MOUSE_MIDDLE]) {
         Vector2 mouse_delta = v2((f32)g_platform->input.state.mouse_dx, (f32)g_platform->input.state.mouse_dy);
@@ -139,6 +146,7 @@ static void tick_controller(Entity_Manager* em, Entity* entity, f32 dt) {
                 if (end_y_tile) {
                     end_y_tile->content = TC_Wall;
                     end_y_tile->wall.type = WT_Steel;
+
                     refresh_wall_visual(em, x, end_y - 1, 0, true);
                 }
             }

@@ -557,7 +557,7 @@ DLL_EXPORT void tick_game(f32 dt) {
                 Rect selection = rect_from_points(controller->selection.start, controller->selection.current);
                 selection.min = v2_floor(selection.min);
                 selection.max = v2_add(v2_floor(selection.max), v2s(1.f));
-                Vector4 selection_color = color_from_hex(0x5ecf4466);
+                Vector4 selection_color = rgba_from_hex(0x5ecf4466);
                 f32 selection_z = -2.f;
 
                 switch (controller->mode) {
@@ -620,6 +620,9 @@ DLL_EXPORT void tick_game(f32 dt) {
             gui_label_printf(" ");
 
             do_debug_ui();
+
+            Rect hotbar_panel = rect_from_raw(0.f, 0.f, rect_width(viewport), 50.f);
+            gui_panel_rect(hotbar_panel);
         }
     }
 

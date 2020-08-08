@@ -304,6 +304,8 @@ void imm_begin(void) {
 }
 
 void imm_flush(void) {
+    if (imm_renderer->vertex_count == 0) return;
+
     f64 start_time = g_platform->time_in_seconds();
 
     Shader* bound_shader = get_bound_shader();

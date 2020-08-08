@@ -16,6 +16,7 @@ static u64 hash_gui_id(void* a, void* b, int size) {
 typedef enum GUI_Widget_Type {
     GWT_Label,
     GWT_Checkbox,
+    GWT_Panel,
 } GUI_Widget_Type;
 
 enum GUI_Widget_Flags {
@@ -44,6 +45,7 @@ typedef struct GUI_Widget {
         struct {
             String label;
             GUI_Text_Alignment alignment;
+            Font* font;
         };
         // GWT_Checkbox
         b32 is_checked;
@@ -58,11 +60,17 @@ typedef struct GUI_Widget_State {
     };
 } GUI_Widget_State;
 
+#define STYLE_VARIABLES(macro) \
+macro(Font_Collection*, font) \
+macro(int, font_size) \
+macro(Vector4, foreground_color) \
+macro(Vector4, background_color) 
+
 #define GUI_WIDGET_CAP 1024
 typedef struct GUI_State {
     int widget_count;
     GUI_Widget widgets[GUI_WIDGET_CAP];
-    Hash_Table widget_state; // Key GUI_Id, Value E_Widget_State
+    Hash_Table widget_state; // Key GUI_Id, Value GUI_Widget_State
 
     int layout_count;
     GUI_Layout layouts[GUI_WIDGET_CAP];
@@ -70,8 +78,11 @@ typedef struct GUI_State {
     int clip_count;
     Rect clips[GUI_WIDGET_CAP];
 
-    Vector4 label_color;
-    Font* label_font;
+#define DEFINE_STYLE_STACKS(type, name) \
+    int name ## _count; \
+    type name[GUI_WIDGET_CAP];
+    STYLE_VARIABLES(DEFINE_STYLE_STACKS)
+#undef DEFINE_STYLE_STACKS
 
     GUI_Id hovered;
     GUI_Id focused;
@@ -90,6 +101,12 @@ static GUI_State* gui_state;
 
 #define push_widget(widget) assert(gui_state->widget_count < GUI_WIDGET_CAP); gui_state->widgets[gui_state->widget_count++] = widget
 #define push_layout(layout) assert(gui_state->layout_count < GUI_WIDGET_CAP); gui_state->layouts[gui_state->layout_count++] = layout
+
+#define push_style(name, value) assert(gui_state->name ## _count < GUI_WIDGET_CAP); gui_state->name[gui_state->name ## _count++] = value;
+#define pop_style(name, value) assert(gui_state->name ## _count > 0); gui_state->name ## _count -= 1;
+#define get_style(name) gui_state->name[gui_state->name ## _count - 1]
+
+static Font* get_font(void) { return font_at_size(get_style(font), (int)((f32)get_style(font_size) * gui_state->scale)); }
 
 static void set_focus(GUI_Id id) {
     gui_state->focused = id;
@@ -186,7 +203,8 @@ void gui_label_rect(Rect rect, String label) {
         .type      = GWT_Label,
         .label     = copy_string(label, g_platform->frame_arena),
         .alignment = GTA_Left,
-        .color     = gui_state->label_color,
+        .color     = get_style(foreground_color),
+        .font      = get_font(),
     };
 
     push_widget(the_widget);
@@ -207,7 +225,8 @@ void gui_label_printf_rect(Rect rect, const char* fmt, ...) {
         .type      = GWT_Label,
         .label     = label,
         .alignment = GTA_Left,
-        .color     = gui_state->label_color,
+        .color     = get_style(foreground_color),
+        .font      = get_font(),
     };
 
     push_widget(the_widget);
@@ -216,7 +235,7 @@ void gui_label_printf_rect(Rect rect, const char* fmt, ...) {
 void gui_label(String label) {
     GUI_Layout* layout = last_layout();
 
-    Rect string_rect = font_string_rect(label, gui_state->label_font, rect_width(layout->bounds));
+    Rect string_rect = font_string_rect(label, get_font(), rect_width(layout->bounds));
     f32 padding = 2.f * gui_state->scale;
 
     Rect rect = rect_from_layout(layout, (layout->is_col ? string_rect.max.x : string_rect.max.y) + padding);
@@ -269,6 +288,16 @@ b32 gui_checkbox(GUI_Id id, b32* value) {
     return gui_checkbox_rect(id, rect, value);
 }
 
+void gui_panel_rect(Rect rect) {
+    GUI_Widget the_widget = {
+        .bounds    = rect,
+        .type      = GWT_Panel,
+        .color     = get_style(background_color),
+    };
+
+    push_widget(the_widget);
+}
+
 b32 is_hovering_widget(void) { return gui_state->hovered.whole != 0; }
 
 void init_gui(Platform* platform) {
@@ -276,11 +305,13 @@ void init_gui(Platform* platform) {
 
     if (gui_state->is_initialized) return;
     gui_state->is_initialized = true;
-    gui_state->label_color = v4s(1.f);
     gui_state->scale = platform->dpi_scale;
 
     Font_Collection* fc = find_font_collection(from_cstr("assets/fonts/Menlo-Regular"));
-    gui_state->label_font = font_at_size(fc, (int)(24.f * gui_state->scale));
+    push_style(font, fc)
+    push_style(font_size, 14);
+    push_style(foreground_color, rgba_from_hex(0xFBF1C7FF));
+    push_style(background_color, rgba_from_hex(0x282828FF));
 
     gui_state->widget_state = make_hash_table(GUI_Id, GUI_Widget_State, hash_gui_id, platform->permanent_arena);
     reserve_hash_table(&gui_state->widget_state, GUI_WIDGET_CAP);
@@ -303,22 +334,25 @@ void end_gui(f32 dt) {
     Rect viewport = { v2z(), v2((f32)g_platform->window_width, (f32)g_platform->window_height) };
 
     draw_right_handed(viewport);
-    set_uniform_texture("atlas", gui_state->label_font->atlas);
 
     f32 gui_z = -1.f;
 
-    imm_begin();
     for (int i = 0; i < gui_state->widget_count; ++i) {
         GUI_Widget widget = gui_state->widgets[i];
 
         switch (widget.type) {
         case GWT_Label: 
+            imm_begin();    
+            set_uniform_texture("atlas", widget.font->atlas);
             // @TODO(colby): Alignment
             f32 max_width = widget.bounds.max.x - widget.bounds.min.x;
-            Vector2 xy = v2(widget.bounds.min.x, widget.bounds.max.y - (f32)gui_state->label_font->size);
-            imm_string_2d(widget.label, gui_state->label_font, max_width, xy, gui_z, widget.color);
+            Vector2 xy = v2(widget.bounds.min.x, widget.bounds.max.y - (f32)widget.font->size);
+            imm_string_2d(widget.label, widget.font, max_width, xy, gui_z, widget.color);
+            imm_flush();
             break;
         case GWT_Checkbox:
+            imm_begin();
+            
             Vector4 background_color = v4(1.f, 1.f, 1.f, 0.5f);
             if (gui_state->hovered.whole == widget.id.whole) background_color.a = 0.7f;
             if (gui_state->focused.whole == widget.id.whole) background_color.a = 1.f;
@@ -329,12 +363,18 @@ void end_gui(f32 dt) {
                 foreground_color.xyz = v3s(0.f);
                 foreground_color.a += 0.2f;
                 imm_rect((Rect) { v2_add(widget.bounds.min, v2s(10.f)), v2_sub(widget.bounds.max, v2s(10.f)) }, gui_z, foreground_color);
+            
             }
+            imm_flush();
+            break;
+        case GWT_Panel:
+            imm_begin();
+            imm_rect(widget.bounds, gui_z, widget.color);
+            imm_flush();
             break;
         default: invalid_code_path;
         };
     }
-    imm_flush();
 
     gui_state->widget_count = 0;
     gui_state->last_duration = g_platform->time_in_seconds() - gui_state->start_time;

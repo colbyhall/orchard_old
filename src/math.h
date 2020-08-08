@@ -115,7 +115,7 @@ typedef union Vector4 {
 
 inline Vector4 v4(f32 x, f32 y, f32 z, f32 w) { return (Vector4) { x, y, z, w }; }
 inline Vector4 v4s(f32 s) { return v4(s, s, s, s); }
-inline Vector4 color_from_hex(int color) {
+inline Vector4 rgba_from_hex(int color) {
     u8 red   = (u8)((color & 0xFF000000) >> 24);
     u8 green = (u8)((color & 0x00FF0000) >> 16);
     u8 blue  = (u8)((color & 0x0000FF00) >> 8);

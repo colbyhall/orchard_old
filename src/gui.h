@@ -15,6 +15,7 @@ inline GUI_Id gui_id_from_ptr_index(void* ptr, int index) {
     id.index = index;
     return id;
 }
+#define procedural_gui_id (GUI_Id) { .item = __LINE__, .index = __COUNTER__ }
 
 const GUI_Id null_gui_id = { 0 };
 
@@ -38,8 +39,11 @@ void gui_label_rect(Rect rect, String label) ;
 void gui_label(String label);
 void gui_label_printf_rect(Rect rect, const char* fmt, ...);
 void gui_label_printf(const char* fmt, ...);
+
 b32 gui_checkbox_rect(GUI_Id id, Rect rect, b32* value);
 b32 gui_checkbox(GUI_Id id, b32* value);
+
+void gui_panel_rect(Rect rect);
 
 void init_gui(Platform* platform);
 
