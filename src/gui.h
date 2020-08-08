@@ -36,8 +36,8 @@ void gui_push_col_layout_size(GUI_Id id, f32 size, b32 going_right);
 
 void gui_label_rect(Rect rect, String label) ;
 void gui_label(String label);
-void printf_gui_label_rect(Rect rect, const char* fmt, ...);
-void printf_gui_label(const char* fmt, ...);
+void gui_label_printf_rect(Rect rect, const char* fmt, ...);
+void gui_label_printf(const char* fmt, ...);
 b32 gui_checkbox_rect(GUI_Id id, Rect rect, b32* value);
 b32 gui_checkbox(GUI_Id id, b32* value);
 

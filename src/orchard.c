@@ -226,29 +226,6 @@ int vprintf_builder(Builder* builder, const char* fmt, va_list args) {
     return result;
 }
 
-static void regen_map(Entity_Manager* em, Random_Seed seed) {
-    o_log("[Game] Generating map with seed %llu", seed.seed);
-
-    int chunk_cap_sq = (int)sqrt(CHUNK_CAP);
-    for (int x = 0; x < chunk_cap_sq; ++x) {
-        for (int y = 0; y < chunk_cap_sq; ++y) {
-            Chunk chunk = {
-                x, y, 0,
-                mem_alloc_array(em->tile_memory, Tile, CHUNK_SIZE * CHUNK_SIZE)
-            };
-
-            for (int i = 0; i < CHUNK_SIZE * CHUNK_SIZE; ++i) chunk.tiles[i].type = TT_Open;
-
-            Chunk_Ref ref = { x, y };
-
-            push_hash_table(&em->chunks, ref, chunk);
-        }
-    }
-
-    Controller* controller = make_controller(em, v2s((f32)chunk_cap_sq * CHUNK_SIZE / 2.f), MAX_CAMERA_ORTHO_SIZE);
-    set_controller(em, controller);
-}
-
 Float_Heap make_float_heap(Allocator allocator, int reserve) {
     Float_Heap result = { .allocator = allocator };
     reserve_float_heap(&result, reserve + 1);
@@ -268,32 +245,6 @@ void reserve_float_heap(Float_Heap* heap, int amount) {
     heap->buckets = mem_realloc(heap->allocator, heap->buckets, sizeof(Float_Heap_Bucket) * heap->cap);
 }
 
-void push_min_float_heap(Float_Heap* heap, f32 value, int index) {
-    if (heap->count + 1 >= heap->cap) reserve_float_heap(heap, 1);
-
-    heap->buckets[++heap->count] = (Float_Heap_Bucket) { value, index };
-    
-    index = heap->count; // this is kind of ew but oh well
-
-    while (heap->buckets[index].value < heap->buckets[heap_parent(index)].value && heap_is_leaf(index, heap->count)) {
-        swap(heap->buckets[index], heap->buckets[heap_parent(index)], Float_Heap_Bucket);
-        index = heap_parent(index);
-    }
-}
-
-void push_max_float_heap(Float_Heap* heap, f32 value, int index) {
-    if (heap->count + 1 >= heap->cap) reserve_float_heap(heap, 1);
-
-    heap->buckets[++heap->count] = (Float_Heap_Bucket) { value, index };
-    
-    index = heap->count; // this is kind of ew but oh well
-
-    while (heap->buckets[index].value > heap->buckets[heap_parent(index)].value) {
-        swap(heap->buckets[index], heap->buckets[heap_parent(index)], Float_Heap_Bucket);
-        index = heap_parent(index);
-    }
-}
-
 static void float_heap_minify(Float_Heap* heap, int index) {
     if (!heap_is_leaf(index, heap->count)) {
         if (heap->buckets[index].value > heap->buckets[heap_left_child(index)].value || heap->buckets[index].value > heap->buckets[heap_right_child(index)].value) {
@@ -306,6 +257,38 @@ static void float_heap_minify(Float_Heap* heap, int index) {
                 float_heap_minify(heap, heap_right_child(index));
             }
         }
+    }
+}
+
+void push_min_float_heap(Float_Heap* heap, f32 value, int index) {
+    if (heap->count + 1 >= heap->cap) reserve_float_heap(heap, 1);
+
+    heap->buckets[++heap->count] = (Float_Heap_Bucket) { value, index };
+
+    index = heap->count; // this is kind of ew but oh well
+
+    while (heap->buckets[index].value < heap->buckets[heap_parent(index)].value && heap_is_leaf(index, heap->count)) {
+        swap(heap->buckets[index], heap->buckets[heap_parent(index)], Float_Heap_Bucket);
+        index = heap_parent(index);
+    }
+
+    for (int i = heap->count / 2; i >= 1; --i) {
+        float_heap_minify(heap, i);
+    }
+}
+
+void push_max_float_heap(Float_Heap* heap, f32 value, int index) {
+    if (heap->count + 1 >= heap->cap) reserve_float_heap(heap, 1);
+
+    heap->buckets[++heap->count] = (Float_Heap_Bucket) { value, index };
+    
+    float_heap_minify(heap, 1);
+
+    index = heap->count; // this is kind of ew but oh well
+
+    while (heap->buckets[index].value > heap->buckets[heap_parent(index)].value) {
+        swap(heap->buckets[index], heap->buckets[heap_parent(index)], Float_Heap_Bucket);
+        index = heap_parent(index);
     }
 }
 
@@ -379,10 +362,8 @@ DLL_EXPORT void init_game(Platform* platform) {
     }
     game_state->is_initialized = true;
 
-    regen_map(
-        game_state->entity_manager, 
-        init_seed((int)g_platform->time_in_seconds())
-    );
+    Controller* controller = make_controller(game_state->entity_manager, v2s((WORLD_SIZE * CHUNK_SIZE) / 2.f), MAX_CAMERA_ORTHO_SIZE);
+    set_controller(game_state->entity_manager, controller);
 }
 
 DLL_EXPORT void tick_game(f32 dt) {
@@ -432,6 +413,7 @@ DLL_EXPORT void tick_game(f32 dt) {
 
         draw_state->num_draw_calls = 0;
         draw_state->vertices_drawn = 0;
+        draw_state->draw_call_duration = 0.0;
 
         set_shader(find_shader(from_cstr("assets/shaders/basic2d")));
         draw_right_handed(viewport);
@@ -452,8 +434,8 @@ DLL_EXPORT void tick_game(f32 dt) {
             
             // Draw tile in a single batch
             imm_begin();
-            for (int i = 0; i < em->chunks.pair_count; ++i) {
-                Chunk* chunk = value_at_hash_table(&em->chunks, i);
+            for (int i = 0; i < WORLD_SIZE * WORLD_SIZE; ++i) {
+                Chunk* chunk = &em->chunks[i];
                 
                 Vector2 min = v2((f32)chunk->x * CHUNK_SIZE, (f32)chunk->y * CHUNK_SIZE);
                 Vector2 max = v2_add(min, v2(CHUNK_SIZE, CHUNK_SIZE));
@@ -472,7 +454,6 @@ DLL_EXPORT void tick_game(f32 dt) {
                         f32 tile_z = -5.f;
 
                         if (tile->content == TC_Wall) continue;
-                        if (!rect_overlaps_rect(viewport_in_world_space, trect, 0)) continue;
 
                         int sprites_per_row = terrain->width / PIXELS_PER_METER;
                         int sprite_y = tile->type / sprites_per_row;
@@ -505,8 +486,8 @@ DLL_EXPORT void tick_game(f32 dt) {
             Texture2d* walls = find_texture2d(from_cstr("assets/sprites/walls"));
             set_uniform_texture("diffuse", *walls);
             imm_begin();
-            for (int i = 0; i < em->chunks.pair_count; ++i) {
-                Chunk* chunk = value_at_hash_table(&em->chunks, i);
+            for (int i = 0; i < WORLD_SIZE * WORLD_SIZE; ++i) {
+                Chunk* chunk = &em->chunks[i];
                 
                 Vector2 min = v2((f32)chunk->x * CHUNK_SIZE, (f32)chunk->y * CHUNK_SIZE);
                 Vector2 max = v2_add(min, v2(CHUNK_SIZE, CHUNK_SIZE));
@@ -580,17 +561,25 @@ DLL_EXPORT void tick_game(f32 dt) {
 
     do_gui(dt) {
         gui_row_layout_rect(viewport, true) {
-            printf_gui_label("FPS: %i", game_state->fps);
+            gui_label_printf("FPS: %i", game_state->fps);
+
+            gui_label_printf(" ");
 
             f64 precise_dt = g_platform->current_frame_time - g_platform->last_frame_time;
-            printf_gui_label("Frame Time: %.3fms", precise_dt * 1000.0);
+            gui_label_printf("Frame Time: %.3fms", precise_dt * 1000.0);
+            gui_label_printf("    Tick Time: %.3fms", tick_duration * 1000.0);
+            gui_label_printf("    Draw Time: %.3fms", draw_duration * 1000.0);
+            gui_label_printf("        Draw Calls: %i", draw_state->num_draw_calls);
+            gui_label_printf("        Vertices Drawn: %i", draw_state->vertices_drawn);
+            gui_label_printf("        GPU Time: %.3fms", draw_state->draw_call_duration * 1000.0);
+            gui_label_printf("    GUI Time: %.3fms", gui_state->last_duration * 1000.0);
 
-            printf_gui_label(" Tick Time: %.3fms", tick_duration * 1000.0);
-            printf_gui_label(" Draw Time: %.3fms", draw_duration * 1000.0);
-            printf_gui_label("  GUI Time: %.3fms", gui_state->last_duration * 1000.0);
+            gui_label_printf(" ");
 
-            printf_gui_label("Build: %s", DEBUG_BUILD ? "Debug" : "Release");
-            printf_gui_label(" ");
+            gui_label_printf("Build: %s", DEBUG_BUILD ? "Debug" : "Release");
+
+            gui_label_printf(" ");
+
             do_debug_ui();
         }
     }

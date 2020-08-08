@@ -192,7 +192,7 @@ void gui_label_rect(Rect rect, String label) {
     push_widget(the_widget);
 }
 
-void printf_gui_label_rect(Rect rect, const char* fmt, ...) {
+void gui_label_printf_rect(Rect rect, const char* fmt, ...) {
     Builder builder = make_builder(g_platform->frame_arena, 0);
     
     va_list args;
@@ -223,7 +223,7 @@ void gui_label(String label) {
     gui_label_rect(rect, label);
 }
 
-void printf_gui_label(const char* fmt, ...) {
+void gui_label_printf(const char* fmt, ...) {
     Builder builder = make_builder(g_platform->frame_arena, 0);
     
     va_list args;

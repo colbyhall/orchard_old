@@ -23,6 +23,8 @@ typedef struct Draw_State {
     int num_draw_calls;
     int vertices_drawn;
 
+    f64 draw_call_duration;
+
     b32 is_initialized;
 } Draw_State;
 
@@ -302,6 +304,8 @@ void imm_begin(void) {
 }
 
 void imm_flush(void) {
+    f64 start_time = g_platform->time_in_seconds();
+
     Shader* bound_shader = get_bound_shader();
     static b32 thrown_bound_shader_error = false;
     if (!bound_shader) {
@@ -321,6 +325,7 @@ void imm_flush(void) {
     
     glDrawArrays(GL_TRIANGLES, 0, imm_renderer->vertex_count);
 
+    draw_state->draw_call_duration += g_platform->time_in_seconds() - start_time;
     draw_state->num_draw_calls += 1;
     draw_state->vertices_drawn += imm_renderer->vertex_count;
 }

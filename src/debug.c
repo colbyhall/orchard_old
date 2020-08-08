@@ -80,7 +80,7 @@ void init_debug(Platform* platform) {
 
 void do_debug_ui(void) {
     gui_col_layout_size(24.f * g_platform->dpi_scale, true) {
-        printf_gui_label("Show Pathfind Debug");
+        gui_label_printf("Show Pathfind Debug");
         gui_checkbox(gui_id_from_ptr_index(g_debug_state, 0), &g_debug_state->draw_pathfinding);
     }
 }

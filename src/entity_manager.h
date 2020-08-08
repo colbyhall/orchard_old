@@ -41,13 +41,11 @@ typedef enum Tile_Content {
 } Tile_Content;
 
 typedef struct Tile_Ref {
-    int x, y, z;
+    int x, y;
 } Tile_Ref;
 
 inline Tile_Ref tile_ref_from_location(Vector2 a) { return (Tile_Ref) { (int)a.x, (int)a.y}; }
-inline b32 tile_ref_eq(Tile_Ref a, Tile_Ref b) { 
-    return a.x == b.x && a.y == b.y && a.z == b.z;
-}
+inline b32 tile_ref_eq(Tile_Ref a, Tile_Ref b) { return a.x == b.x && a.y == b.y; }
 
 typedef struct Tile {
     Tile_Type type;
@@ -63,8 +61,8 @@ typedef struct Chunk_Ref {
 
 #define CHUNK_SIZE 16
 typedef struct Chunk {
-    int x, y, z;
-    Tile* tiles; // Allocated elsewhere because we scan chunks for their pos in a list
+    int x, y;
+    Tile* tiles; // Allocated elsewhere because we scan chunks for their pos in a list. Size is CHUNK_SIZE * CHUNK_SIZE
 } Chunk;
 
 typedef u32 Entity_Id; // Invalid Entity_Id is 0
@@ -95,10 +93,10 @@ typedef struct Entity {
     Entity base; \
 }
 
-#define CHUNK_CAP 256
-#define ENTITY_CAP (CHUNK_SIZE * CHUNK_SIZE * CHUNK_CAP)
+#define WORLD_SIZE 16
+#define ENTITY_CAP (CHUNK_SIZE * CHUNK_SIZE * WORLD_SIZE * WORLD_SIZE)
 typedef struct Entity_Manager {
-    Hash_Table chunks;
+    Chunk chunks[WORLD_SIZE * WORLD_SIZE];
     Allocator tile_memory;
 
     int entity_count;
@@ -126,7 +124,7 @@ inline Entity* entity_from_iterator(Entity_Iterator iter) { return iter.manager-
 
 void* find_entity_by_id(Entity_Manager* em, Entity_Id id);
 Tile* find_tile_at(Entity_Manager* em, int x, int y, int z);
-inline Tile* find_tile_by_ref(Entity_Manager* em, Tile_Ref ref) { return find_tile_at(em, ref.x, ref.y, ref.z); }
+inline Tile* find_tile_by_ref(Entity_Manager* em, Tile_Ref ref) { return find_tile_at(em, ref.x, ref.y, 0); }
 Entity_Manager* make_entity_manager(Allocator allocator);
 
 void* _make_entity(Entity_Manager* em, int size, Entity_Type type);
@@ -140,21 +138,27 @@ void tick_null(Entity_Manager* em, Entity* entity, f32 dt) { }
 void draw_null(Entity_Manager* em, Entity* entity) { }
 
 typedef struct Path_Tile {
+    b32 is_initialized;
     Tile_Ref parent;
     f32 f, g, h;
+    b32 is_passable;
 
 #if DEBUG_BUILD
     int times_touched;
 #endif
 } Path_Tile;
 
+typedef struct Path_Map {
+    int num_discovered;
+    Path_Tile* tiles;
+} Path_Map;
 
 typedef struct Path {
     Tile_Ref* refs;
     int ref_count;
 
 #if DEBUG_BUILD
-    Hash_Table came_from;
+    Path_Map path_map;
 #endif
 } Path;
 
