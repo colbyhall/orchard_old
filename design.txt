@@ -41,3 +41,10 @@ Systems
     * Botany
     * Genetic Research
     * Job Management
+        - Genric Task System
+    * FTL travel to planets, solar systems, 
+    * Sub Light Speed travel using cryo sleep
+    * Wacky funny sciences
+
+Scenarios
+    * Start by building a space ship that can then be turned into a space station or one can be found. 
