@@ -8,33 +8,14 @@ Pawn* make_pawn(Entity_Manager* em, Vector2 location) {
     return result;
 }
 
-
 static void tick_pawn(Entity_Manager* em, Entity* entity, f32 dt) {
     assert(entity->type == ET_Pawn);
 
-    f32 max_speed = 3.f;
     Pawn* pawn = entity->derived;
 
-    if (pawn->path.ref_count) {
-        Tile_Ref path_tile = pawn->path.refs[0];
-        Vector2 target_location = v2_add(v2((f32)path_tile.x, (f32)path_tile.y), v2s(0.5f));
-        Vector2 to_point = v2_sub(target_location, pawn->location);
-   
-        f32 to_point_len = v2_len(to_point);
-        if (to_point_len > 0.1f) {
-            to_point = v2_div(to_point, v2s(to_point_len));
-            pawn->location = v2_add(pawn->location, v2_mul(to_point, v2s(max_speed * dt)));
-        } else {
-            to_point = v2_div(to_point, v2s(to_point_len));
-            pawn->location = v2_add(pawn->location, v2_mul(to_point, v2s(max_speed * dt)));
+    if (!pawn->task_count) return;
 
-            if (pawn->path.ref_count > 0) {
-                pawn->path.ref_count--;
-                pawn->path.refs++;
-            }
-        }
-    }
-
+    Task* current_task = &pawn->task_queue[0];
 }
 
 static void draw_pawn(Entity_Manager* em, Entity* entity) {

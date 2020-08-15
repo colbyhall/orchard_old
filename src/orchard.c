@@ -482,7 +482,6 @@ DLL_EXPORT void tick_game(f32 dt) {
                         f32 tile_z = -5.f;
 
                         // if (rect_overlaps_rect(viewport_in_world_space, trect)) continue;
-                        if (tile->content == TC_Wall) continue;
 
                         int sprites_per_row = terrain->width / PIXELS_PER_METER;
                         int sprite_y = tile->type / sprites_per_row;

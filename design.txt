@@ -28,10 +28,29 @@ Multiple story tellers
 Easy mod support. C and LUA?
 
 Systems
-    * Electricity
-        - Tiers of electricity generation
-    * Gravity
-        - Tiers of artifical gravity
+    * Pawn
+        - Skills System
+            * Skills involved with jobs and other life things
+        - Needs System
+        - Health System
+            * Body parts can be damage and will need to heal. this includes diseases and such
+    * Job Management
+        - Rim World Esk Task System
+        - List of several jobs that can have priority set for each pawn
+        - List includes particular Jobs
+        - Jobs can boost Pawn Stats
+    * Spacecraft Building
+        - Several types of crafts but all using the same building system
+        - Build onto square grid
+        - Need a way to seperate craft on grid
+        - Parts must be fabricated by pawns. 
+        - Walls, Floors, Doors, Windows, Machines
+        - Utilities
+            * Tiers of electricity generation (Solar, Nuclear, Etc)
+            * Tiers of water filtration
+            * Tiers of oxygen generation
+            * Tiers of artifical gravity
+            * Custom utility logisitic screens like prison architect 
     * Hull Breaches
         - Lock off zones when a hull is breached
     * Resource Gathering
@@ -40,8 +59,6 @@ Systems
     * Chemical Research
     * Botany
     * Genetic Research
-    * Job Management
-        - Genric Task System
     * FTL travel to planets, solar systems, 
     * Sub Light Speed travel using cryo sleep
     * Wacky funny sciences
