@@ -5,7 +5,7 @@
 
 typedef enum Controller_Mode {
     CM_Normal,
-    CM_Set_Tile,
+    CM_Set_Cell,
     CM_Set_Wall,
 } Controller_Mode;
 

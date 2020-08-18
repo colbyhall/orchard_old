@@ -35,6 +35,23 @@ void step_entity_iterator(Entity_Iterator* iter) {
     }
 }
 
+b32 can_step_cell_rect_iterator(Cell_Rect_Iterator iter) {
+    int dist_x = iter.p1.x - iter.p0.x + 1;
+    int dist_y = iter.p1.y - iter.p0.y + 1;
+
+    return iter.index < dist_x * dist_y;
+}
+
+Cell_Ref ref_from_rect_iterator(Cell_Rect_Iterator iter) {
+    int dist_x = iter.p1.x - iter.p0.x + 1;
+    int dist_y = iter.p1.y - iter.p0.y + 1;
+
+    int y = iter.index / dist_x;
+    int x = iter.index - y * dist_x;
+
+    return (Cell_Ref) { iter.p0.x + x, iter.p0.y + y };
+}
+
 void* find_entity_by_id(Entity_Manager* em, Entity_Id id) {
     for (entity_iterator(em)) {
         Entity* entity = entity_from_iterator(iter);
@@ -45,21 +62,19 @@ void* find_entity_by_id(Entity_Manager* em, Entity_Id id) {
     return 0;
 }
 
-Tile* find_tile_at(Entity_Manager* em, int x, int y, int z) {
+Cell* find_cell_at(Entity_Manager* em, int x, int y) {
     if (x > CHUNK_SIZE * WORLD_SIZE || x < 0) return 0;
     if (y > CHUNK_SIZE * WORLD_SIZE || y < 0) return 0;
 
     int chunk_x = x / CHUNK_SIZE;
     int chunk_y = y / CHUNK_SIZE;
 
-    Chunk_Ref ref = { chunk_x, chunk_y };
-
-    Chunk chunk = em->chunks[chunk_x + chunk_y * WORLD_SIZE];
+    Chunk* chunk = &em->chunks[chunk_x + chunk_y * WORLD_SIZE];
 
     int local_x = x - chunk_x * CHUNK_SIZE;
     int local_y = y - chunk_y * CHUNK_SIZE;
     assert(local_x <= CHUNK_SIZE && local_y <= CHUNK_SIZE);
-    return &chunk.tiles[local_x + local_y * CHUNK_SIZE];
+    return &chunk->cells[local_x + local_y * CHUNK_SIZE];
 }
 
 static u64 hash_generic(void* a, void* b, int size) {
@@ -73,35 +88,9 @@ static u64 hash_generic(void* a, void* b, int size) {
     return fnv1_hash(a, size);
 }
 
-static u64 hash_chunk_ref(void* a, void* b, int size) {
-    assert(sizeof(Chunk_Ref) == size);
-
-    Chunk_Ref* a_ref = a;
-    if (b) {
-        Chunk_Ref* b_ref = b;
-            
-        return a_ref->x == b_ref->x && a_ref->y == b_ref->y;
-    }
-
-    return fnv1_hash(a, size);
-}
-
 Entity_Manager* make_entity_manager(Allocator allocator) {
     Entity_Manager* result = mem_alloc_struct(allocator, Entity_Manager);
-
-    result->tile_memory = allocator;
-    for (int x = 0; x < WORLD_SIZE; ++x) {
-        for (int y = 0; y < WORLD_SIZE; ++y) {
-            Chunk chunk = {
-                x, y,
-                mem_alloc_array(result->tile_memory, Tile, CHUNK_SIZE * CHUNK_SIZE)
-            };
-            result->chunks[x + y * WORLD_SIZE] = chunk;
-        }
-    }
-
     result->entity_memory = pool_allocator(allocator, ENTITY_CAP + ENTITY_CAP / 2, 256);
-
     return result;
 }
 
@@ -128,52 +117,52 @@ void* _make_entity(Entity_Manager* em, int size, Entity_Type type) {
     return result;
 }
 
-static void refresh_wall_visual(Entity_Manager* em, int x, int y, int z, b32 first) {
-    Tile* tile = find_tile_at(em, x, y, z);
-    if (!tile) return;
-    if (tile->content != TC_Wall && !first) return;
+static void refresh_wall_visual(Entity_Manager* em, int x, int y, b32 first) {
+    Cell* cell = find_cell_at(em, x, y);
+    if (!cell) return;
+    if (cell->content != CC_Wall && !first) return;
 
     b32 has_north = false;
-    Tile* north = find_tile_at(em, x, y + 1, z);
-    if (north && north->content == TC_Wall) {
-        if (first) refresh_wall_visual(em, x, y + 1, z, false);
+    Cell* north = find_cell_at(em, x, y + 1);
+    if (north && north->content == CC_Wall) {
+        if (first) refresh_wall_visual(em, x, y + 1, false);
         has_north = true;
     }
 
     b32 has_south = false;
-    Tile* south = find_tile_at(em, x, y - 1, z);
-    if (south && south->content == TC_Wall) {
-        if (first) refresh_wall_visual(em, x, y - 1, z, false);
+    Cell* south = find_cell_at(em, x, y - 1);
+    if (south && south->content == CC_Wall) {
+        if (first) refresh_wall_visual(em, x, y - 1, false);
         has_south = true;
     }
 
     b32 has_east = false;
-    Tile* east = find_tile_at(em, x + 1, y, z);
-    if (east && east->content == TC_Wall) {
-        if (first) refresh_wall_visual(em, x + 1, y, z, false);
+    Cell* east = find_cell_at(em, x + 1, y);
+    if (east && east->content == CC_Wall) {
+        if (first) refresh_wall_visual(em, x + 1, y, false);
         has_east = true;
     }
 
     b32 has_west = false;
-    Tile* west = find_tile_at(em, x - 1, y, z);
-    if (west && west->content == TC_Wall) {
-        if (first) refresh_wall_visual(em, x - 1, y, z, false);
+    Cell* west = find_cell_at(em, x - 1, y);
+    if (west && west->content == CC_Wall) {
+        if (first) refresh_wall_visual(em, x - 1, y, false);
         has_west = true;
     }
 
-    if (tile->content != TC_Wall && first) return;
+    if (cell->content != CC_Wall && first) return;
 
     int num_surrounding = has_north + has_south + has_east + has_west;
     switch (num_surrounding) {
     case 0: 
-        tile->wall.visual = WV_South;
+        cell->wall.visual = WV_South;
         break;
     case 1: {
         Wall_Visual visual    = WV_South;
         if (has_south) visual = WV_North;
         if (has_east) visual  = WV_West;
         if (has_west) visual  = WV_East;
-        tile->wall.visual = visual;
+        cell->wall.visual = visual;
     } break;
     case 2: {
         Wall_Visual visual = WV_South;
@@ -183,135 +172,128 @@ static void refresh_wall_visual(Entity_Manager* em, int x, int y, int z, b32 fir
         if (has_west && has_north)  visual = WV_East;
         if (has_east && has_south)  visual = WV_South_East;
         if (has_west && has_south)  visual = WV_South_West;
-        tile->wall.visual = visual;
+        cell->wall.visual = visual;
     } break;
     case 3: {
         Wall_Visual visual = WV_Cross;
         if (has_north && !has_south) visual = WV_East_West;
         if (has_north && has_south && has_east) visual = WV_South_East;
         if (has_north && has_south && has_west) visual = WV_South_West;
-        tile->wall.visual = visual;
+        cell->wall.visual = visual;
     } break;
     case 4:
-        tile->wall.visual = WV_Cross;
+        cell->wall.visual = WV_Cross;
         break;
     }
 }
 
-static u64 hash_path_tile(void* a, void* b, int size) {
-    assert(sizeof(Path_Tile) == size);
+static u64 hash_path_cell(void* a, void* b, int size) {
+    assert(sizeof(Path_Cell) == size);
 
-    Path_Tile* a_tile = a;
+    Path_Cell* a_cell = a;
 
     if (b) {
-        Path_Tile* b_tile = b;
-        return tile_ref_eq(a_tile->parent, b_tile->parent);
+        Path_Cell* b_cell = b;
+        return cell_ref_equals(a_cell->parent, b_cell->parent);
     }
 
     return fnv1_hash(a, size);
 }
 
-static u64 hash_tile_ref(void* a, void* b, int size) {
-    assert(size == sizeof(Tile_Ref));
+static u64 hash_cell_ref(void* a, void* b, int size) {
+    assert(size == sizeof(Cell_Ref));
  
-    Tile_Ref* a_t = a;
+    Cell_Ref* a_t = a;
     
     if (b) {
-        Tile_Ref* b_t = b;
+        Cell_Ref* b_t = b;
 
-        return tile_ref_eq(*a_t, *b_t);
+        return cell_ref_equals(*a_t, *b_t);
     }
 
     return fnv1_hash(a, size);
 }
 
-static f32 pathfind_heuristic(Tile_Ref a, Tile_Ref b) {
+static f32 pathfind_heuristic(Cell_Ref a, Cell_Ref b) {
     int dx = abs(b.x - a.x);
     int dy = abs(b.y - a.y);
 
     return (f32)(dx + dy);
 }
 
-static f32 distance_between_tiles(Tile_Ref a, Tile_Ref b) {
+static f32 distance_between_cells(Cell_Ref a, Cell_Ref b) {
     Vector2 a_xy = v2((f32)a.x, (f32)a.y);
     Vector2 b_xy = v2((f32)b.x, (f32)b.y);
     return v2_len(v2_sub(a_xy, b_xy));
 }
 
-static b32 is_tile_traversable(Tile* tile) {
-    if (!tile) return false;
-
-    if (tile->type == TT_Open) return false;
-    if (tile->content == TC_Wall) return false;
+static b32 is_cell_traversable(Cell* cell) {
+    if (!cell) return false;
+    if (cell->content != CFT_None) return false;
 
     return true;
 }
 
-static Path_Tile* find_path_tile(Path_Map* map, Tile_Ref ref) { 
-    Path_Tile* tile = &map->tiles[ref.x + ref.y * CHUNK_SIZE * WORLD_SIZE];
-    if (!tile->is_initialized) return 0;
+static Path_Cell* find_path_cell(Path_Map* map, Cell_Ref ref) { 
+    Path_Cell* cell = &map->cells[ref.x + ref.y * CHUNK_SIZE * WORLD_SIZE];
+    if (!cell->is_initialized) return 0;
     
 #if DEBUG_BUILD
-    tile->times_touched += 1;
+    cell->times_touched += 1;
 #endif
 
-    return tile; 
+    return cell; 
 }
 
-static Path_Tile* set_path_tile(Path_Map* map, Tile_Ref ref, b32 is_passable) {
+static Path_Cell* set_path_cell(Path_Map* map, Cell_Ref ref, b32 is_passable) {
     map->num_discovered += 1;
 
-    Path_Tile* tile = &map->tiles[ref.x + ref.y * CHUNK_SIZE * WORLD_SIZE];    
-    tile->is_initialized = true;
-    tile->parent = ref;
-    tile->is_passable = is_passable;
-    tile->f = 1000000000.f;
+    Path_Cell* cell = &map->cells[ref.x + ref.y * CHUNK_SIZE * WORLD_SIZE];    
+    cell->is_initialized = true;
+    cell->parent = ref;
+    cell->is_passable = is_passable;
+    cell->f = 1000000000.f;
 
 #if DEBUG_BUILD
-    tile->times_touched += 1;
+    cell->times_touched += 1;
 #endif
 
-    return tile;    
+    return cell;    
 }
 
-inline int tile_ref_to_index(Tile_Ref ref) { return ref.x + ref.y * CHUNK_SIZE * WORLD_SIZE; }
-inline Tile_Ref tile_ref_from_index(int index) { 
+inline int cell_ref_to_index(Cell_Ref ref) { return ref.x + ref.y * CHUNK_SIZE * WORLD_SIZE; }
+inline Cell_Ref cell_ref_from_index(int index) { 
     int y = index / (CHUNK_SIZE * WORLD_SIZE);
     int x = index - y * CHUNK_SIZE * WORLD_SIZE;
-    return (Tile_Ref) { x, y };
+    return (Cell_Ref) { x, y };
 }
 
 // @TODO: There are still a number of optimizations we can make here
-//  1. Path map should probably be made of chunks to save memory and lower intialization time
+//  1. Path map should use some iteration counter to keep track of what path cell has been visited
 //  2. Jump point search needs to be implemented
 //  3. Looser heuristic function that sacrifices smallest path for speed
-b32 pathfind(Entity_Manager* em, Tile_Ref source, Tile_Ref dest, Path* path) {
-    if (tile_ref_eq(source, dest)) return true;
+b32 pathfind(Entity_Manager* em, Cell_Ref source, Cell_Ref dest, Path* path) {
+    if (cell_ref_equals(source, dest)) return true;
 
-    Tile* source_tile = find_tile_by_ref(em, source);
-    if (!source_tile || !is_tile_traversable(source_tile)) return false;
+    Cell* source_cell = find_cell_by_ref(em, source);
+    if (!source_cell || !is_cell_traversable(source_cell)) return false;
 
-    Tile* dest_tile = find_tile_by_ref(em, dest);
-    if (!dest_tile || !is_tile_traversable(dest_tile)) return false;
+    Cell* dest_cell = find_cell_by_ref(em, dest);
+    if (!dest_cell || !is_cell_traversable(dest_cell)) return false;
 
-    int tile_count = CHUNK_SIZE * CHUNK_SIZE * WORLD_SIZE * WORLD_SIZE;
-    Path_Map path_map = { .tiles = mem_alloc_array(g_platform->permanent_arena, Path_Tile, tile_count), };
-    // mem_set(path_map.tiles, 0, sizeof(Path_Tile) * tile_count);
+    int cell_count = CHUNK_SIZE * CHUNK_SIZE * WORLD_SIZE * WORLD_SIZE;
+    Path_Map path_map = { .cells = mem_alloc_array(g_platform->permanent_arena, Path_Cell, cell_count), };
+    // mem_set(path_map.cells, 0, sizeof(Path_Cell) * cell_count); This is super expensive
 
-    set_path_tile(&path_map, source, false);
+    set_path_cell(&path_map, source, false);
 
     Float_Heap open = make_float_heap(g_platform->frame_arena, 32);
-    push_min_float_heap(&open, 0.f, tile_ref_to_index(source));
+    push_min_float_heap(&open, 0.f, cell_ref_to_index(source));
 
-    b32* closed = mem_alloc_array(g_platform->frame_arena, b32, tile_count);
-    mem_set(closed, 0, sizeof(b32) * tile_count);
+    b32* closed = mem_alloc_array(g_platform->frame_arena, b32, cell_count);
+    mem_set(closed, 0, sizeof(b32) * cell_count);
 
-    f64 time_doing_min = 0.0;
-    f64 time_wasted = 0.0;
-    f64 time_doing_neighbor = 0.0;
-    int tiles_checked = 0;
-
-    int neighbor_map[] = {
+    static int neighbor_map[] = {
          -1,  0,
           1,  0,
           0, -1,
@@ -324,135 +306,103 @@ b32 pathfind(Entity_Manager* em, Tile_Ref source, Tile_Ref dest, Path* path) {
     };
 
     while (open.count) {
-        tiles_checked += 1;
-        f64 min_start = g_platform->time_in_seconds();
-
-        // Find path tile with lowest f
+        // Find path cell with lowest f
         int current_index      = pop_min_float_heap(&open);
-        Path_Tile current_tile = path_map.tiles[current_index];
-        Tile_Ref current_ref   = tile_ref_from_index(current_index);
-        time_doing_min += g_platform->time_in_seconds() - min_start;
+        Path_Cell current_cell = path_map.cells[current_index];
+        Cell_Ref current_ref   = cell_ref_from_index(current_index);
 
         closed[current_index] = true;
 
         // Check to see if we're at out destination
-        if (tile_ref_eq(dest, current_ref)) {
+        if (cell_ref_equals(dest, current_ref)) {
             // If so build our bath by walking up the graph
-            int ref_count = 0;
-            Tile_Ref final_ref = current_ref;
-            Path_Tile final_tile = current_tile;
+            int point_count = 0;
+            Cell_Ref final_ref = current_ref;
+            Path_Cell final_cell = current_cell;
 
-            while(!tile_ref_eq(final_tile.parent, final_ref)) {
-                ref_count += 1;
-                final_ref = final_tile.parent;
-                final_tile = *find_path_tile(&path_map, final_ref);
+            while(!cell_ref_equals(final_cell.parent, final_ref)) {
+                point_count += 1;
+                final_ref = final_cell.parent;
+                final_cell = *find_path_cell(&path_map, final_ref);
             }
 
-            path->refs = mem_alloc_array(g_platform->permanent_arena, Tile_Ref, ref_count);
-            path->ref_count = ref_count;
+            path->points = mem_alloc_array(g_platform->permanent_arena, Cell_Ref, point_count);
+            path->point_count = point_count;
 
             final_ref = current_ref;
-            final_tile = current_tile;
-            path->refs[ref_count - 1] = dest;
-#if DEBUG_BUILD
-            path->path_map = path_map;
-#endif
+            final_cell = current_cell;
+            path->points[point_count - 1] = dest;
 
-            while(!tile_ref_eq(final_tile.parent, final_ref)) {
-                ref_count -= 1;
-                path->refs[ref_count] = final_ref;
-                final_ref = final_tile.parent;
-                final_tile = *find_path_tile(&path_map, final_ref);
+            while(!cell_ref_equals(final_cell.parent, final_ref)) {
+                point_count -= 1;
+                path->points[point_count] = final_ref;
+                final_ref = final_cell.parent;
+                final_cell = *find_path_cell(&path_map, final_ref);
             }
-
-#if 0
-            o_log(
-                "[Pathfinding] spent %.3fms doing min lookup. wasted %.3fms. checked %i tiles, time doing neighbor %.3fms", 
-                time_doing_min * 1000.0, 
-                time_wasted * 1000.0, 
-                tiles_checked, 
-                time_doing_neighbor * 1000.0
-            );
-#endif
 
             return true;
         }
 
         for (int i = 0; i < array_count(neighbor_map) / 2; ++i) {
-            f64 n_start = g_platform->time_in_seconds();
-
             int x = neighbor_map[i * 2];
             int y = neighbor_map[i * 2 + 1];
 
-            tiles_checked += 1;
+            Cell_Ref neighbor_ref = { current_ref.x + x, current_ref.y + y };
 
-            Tile_Ref neighbor_ref = { current_ref.x + x, current_ref.y + y };
+            // If we haven't initialized our path_cell proxy then do so
+            Path_Cell* path_cell = find_path_cell(&path_map, neighbor_ref);
+            if (!path_cell) {
+                Cell* cell = find_cell_by_ref(em, neighbor_ref);
+                if (!cell) continue;
 
-            // If we haven't initialized our path_tile proxy then do so
-            Path_Tile* path_tile = find_path_tile(&path_map, neighbor_ref);
-            if (!path_tile) {
-                Tile* tile = find_tile_by_ref(em, neighbor_ref);
-                if (!tile) {
-                    time_wasted += g_platform->time_in_seconds() - n_start;
-                    time_doing_neighbor += g_platform->time_in_seconds() - n_start;
-                    continue;
-                }
-
-                path_tile = set_path_tile(&path_map, neighbor_ref, is_tile_traversable(tile));
+                path_cell = set_path_cell(&path_map, neighbor_ref, is_cell_traversable(cell));
             }
 
-            int neighbor_index = tile_ref_to_index(neighbor_ref);
+            int neighbor_index = cell_ref_to_index(neighbor_ref);
 
             b32 is_diagonal = i >= array_count(neighbor_map) / 4;
-            b32 is_passable = path_tile->is_passable;
+            b32 is_passable = path_cell->is_passable;
             if (is_diagonal && is_passable) {
-                Tile_Ref a_ref = { current_ref.x + x, current_ref.y };
-                Tile_Ref b_ref = { current_ref.x, current_ref.y + y};
+                Cell_Ref a_ref = { current_ref.x + x, current_ref.y };
+                Cell_Ref b_ref = { current_ref.x, current_ref.y + y};
                 
-                Path_Tile* a_tile = find_path_tile(&path_map, a_ref);
-                Path_Tile* b_tile = find_path_tile(&path_map, b_ref);
+                Path_Cell* a_cell = find_path_cell(&path_map, a_ref);
+                Path_Cell* b_cell = find_path_cell(&path_map, b_ref);
 
-                is_passable = a_tile->is_passable && b_tile->is_passable;
+                is_passable = a_cell->is_passable && b_cell->is_passable;
             }
 
             // If we're not passable or we're on the closed list try another neighbor
-            if (!is_passable || closed[neighbor_index]) {
-                time_wasted += g_platform->time_in_seconds() - n_start;
-                time_doing_neighbor += g_platform->time_in_seconds() - n_start;
-                continue;
-            }
+            if (!is_passable || closed[neighbor_index]) continue;
 
             // Do the math!
-            f32 g = current_tile.g + (is_diagonal ? 1.41f : 1.f);
+            f32 g = current_cell.g + (is_diagonal ? 1.41f : 1.f);
             f32 h = pathfind_heuristic(neighbor_ref, dest);
             f32 f = g + h;
 
-            if (path_tile->f > f) {
-                path_tile->f = f;
-                path_tile->h = h;
-                path_tile->g = g;
-                path_tile->parent = current_ref;
+            if (path_cell->f > f) {
+                path_cell->f = f;
+                path_cell->h = h;
+                path_cell->g = g;
+                path_cell->parent = current_ref;
 
-                f64 pre_push_min_heap = g_platform->time_in_seconds();
                 push_min_float_heap(&open, f, neighbor_index);
-                time_doing_min += g_platform->time_in_seconds() - pre_push_min_heap;
             }
-            time_doing_neighbor += g_platform->time_in_seconds() - n_start;
         }
     }
 
     return false;
 }
 
-#if DEBUG_BUILD
+#if 0
 
 void draw_pathfind_debug(Entity_Manager* em, Path path) {
-    if (!path.path_map.tiles) return;
+    if (!path.path_map.cells) return;
 
     Controller* controller = find_entity_by_id(em, em->controller_id);
 
     Vector2 mouse_pos_in_world = get_mouse_pos_in_world_space(controller);
-    Tile_Ref mouse_tile = tile_ref_from_location(mouse_pos_in_world);
+    Cell_Ref mouse_cell = cell_ref_from_location(mouse_pos_in_world);
 
     set_shader(find_shader(from_cstr("assets/shaders/font")));
     draw_from(controller->location, controller->current_ortho_size);
@@ -463,24 +413,24 @@ void draw_pathfind_debug(Entity_Manager* em, Path path) {
 
     imm_begin();
     for (int i = 0; i < CHUNK_SIZE * CHUNK_SIZE * WORLD_SIZE * WORLD_SIZE; ++i) {
-        Path_Tile tile = path.path_map.tiles[i];
-        if (!tile.is_initialized) continue;
+        Path_Cell cell = path.path_map.cells[i];
+        if (!cell.is_initialized) continue;
 
-        Tile_Ref ref = tile_ref_from_index(i);
+        Cell_Ref ref = cell_ref_from_index(i);
 
         Vector2 draw_min = v2((f32)ref.x, (f32)ref.y);
         Rect draw_rect = { draw_min, v2_add(draw_min, v2s(1.f)) };
 
-        f32 r = (tile.times_touched) / 20.f;
-        f32 g = tile.g / tile.f;
-        f32 b = tile.h / tile.f;
+        f32 r = (cell.times_touched) / 20.f;
+        f32 g = cell.g / cell.f;
+        f32 b = cell.h / cell.f;
 
         imm_rect(draw_rect, -4.f, v4(r, g, b, 0.5f));
 
-        f32 dist_between_tiles = distance_between_tiles(mouse_tile, ref);
-        if (dist_between_tiles < 5.f && controller->current_ortho_size <= 15.f) {
+        f32 dist_between_cells = distance_between_cells(mouse_cell, ref);
+        if (dist_between_cells < 5.f && controller->current_ortho_size <= 15.f) {
             char buffer[64];
-            sprintf(buffer, "F: %.2f\nG: %.2f\nH: %.2f\nTT: %i", tile.f, tile.g, tile.h, tile.times_touched);
+            sprintf(buffer, "F: %.2f\nG: %.2f\nH: %.2f\nTT: %i", cell.f, cell.g, cell.h, cell.times_touched);
 
             imm_string(from_cstr(buffer), font, 0.2f, 1000.f, v2(draw_min.x, draw_min.y + 1.f - 0.2f), -4.f, v4s(1.f));
 

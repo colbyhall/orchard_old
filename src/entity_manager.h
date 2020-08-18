@@ -25,44 +25,42 @@ typedef struct Wall {
     Wall_Visual visual;
 } Wall;
 
-typedef enum Tile_Type {
-    TT_Open = 0,
-    TT_Steel,
-} Tile_Type;
+typedef enum Cell_Content {
+    CC_None,
+    CC_Wall,
+    CC_Entity,
+} Cell_Content;
 
-static const char* tile_type_names[] = {
-    "Open",
-    "Steel",
-};
+typedef enum Cell_Floor_Type {
+    CFT_None,
+    CFT_Steel_Panel,
+} Cell_Floor_Type;
 
-typedef enum Tile_Content {
-    TC_None = 0,
-    TC_Wall
-} Tile_Content;
+struct Entity;
 
-typedef struct Tile_Ref {
-    int x, y;
-} Tile_Ref;
+typedef struct Cell {
+    b32 has_frame;
+    Cell_Floor_Type floor_type;
 
-inline Tile_Ref tile_ref_from_location(Vector2 a) { return (Tile_Ref) { (int)a.x, (int)a.y}; }
-inline b32 tile_ref_eq(Tile_Ref a, Tile_Ref b) { return a.x == b.x && a.y == b.y; }
-
-typedef struct Tile {
-    Tile_Type type;
-    Tile_Content content;
+    Cell_Content content;
     union {
         Wall wall;
+        struct Entity* entity;
     };
-} Tile;
+} Cell;
 
-typedef struct Chunk_Ref {
-    int x, y;
-} Chunk_Ref;
+typedef struct Cell_Ref { 
+    int x, y; 
+} Cell_Ref;
+
+inline Cell_Ref cell_ref_from_location(Vector2 location) { return (Cell_Ref) { (int)location.x, (int)location.y }; }
+inline b32 cell_ref_equals(Cell_Ref a, Cell_Ref b) { return a.x == b.x && a.y == b.y; }
+inline Rect rect_from_cell(Cell_Ref a) { return (Rect) { v2((f32)a.x, (f32)a.y), v2((f32)a.x + 1.f, (f32)a.y + 1.f) }; }
 
 #define CHUNK_SIZE 16
+#define CELLS_PER_CHUNK (CHUNK_SIZE * CHUNK_SIZE)
 typedef struct Chunk {
-    int x, y;
-    Tile* tiles; // Allocated elsewhere because we scan chunks for their pos in a list. Size is CHUNK_SIZE * CHUNK_SIZE
+    Cell cells[CELLS_PER_CHUNK];
 } Chunk;
 
 typedef u32 Entity_Id; // Invalid Entity_Id is 0
@@ -70,6 +68,7 @@ typedef u32 Entity_Id; // Invalid Entity_Id is 0
 typedef enum Entity_Type {
     ET_Controller,
     ET_Pawn,
+    ET_Furniture,
 } Entity_Type;
 
 #define ENTITY_STRUCT(entry) \
@@ -94,10 +93,11 @@ typedef struct Entity {
 }
 
 #define WORLD_SIZE 16
+#define CHUNK_CAP (WORLD_SIZE * WORLD_SIZE)
 #define ENTITY_CAP (CHUNK_SIZE * CHUNK_SIZE * WORLD_SIZE * WORLD_SIZE)
 typedef struct Entity_Manager {
-    Chunk chunks[WORLD_SIZE * WORLD_SIZE];
-    Allocator tile_memory;
+    Chunk chunks[CHUNK_CAP];
+    Allocator cell_memory;
 
     int entity_count;
     Entity* entities[ENTITY_CAP];
@@ -122,9 +122,18 @@ void step_entity_iterator(Entity_Iterator* iter);
 
 inline Entity* entity_from_iterator(Entity_Iterator iter) { return iter.manager->entities[iter.index]; }
 
+typedef struct Cell_Rect_Iterator {
+    Cell_Ref p0, p1;
+    int index;
+} Cell_Rect_Iterator;
+
+b32 can_step_cell_rect_iterator(Cell_Rect_Iterator iter);
+Cell_Ref ref_from_rect_iterator(Cell_Rect_Iterator iter);
+#define cell_rect_iterator(p0, p1) Cell_Rect_Iterator iter = { p0, p1, 0 }; can_step_cell_rect_iterator(iter); ++iter.index
+
 void* find_entity_by_id(Entity_Manager* em, Entity_Id id);
-Tile* find_tile_at(Entity_Manager* em, int x, int y, int z);
-inline Tile* find_tile_by_ref(Entity_Manager* em, Tile_Ref ref) { return find_tile_at(em, ref.x, ref.y, 0); }
+Cell* find_cell_at(Entity_Manager* em, int x, int y);
+Cell* find_cell_by_ref(Entity_Manager* em, Cell_Ref ref) { return find_cell_at(em, ref.x, ref.y); }
 Entity_Manager* make_entity_manager(Allocator allocator);
 
 void* _make_entity(Entity_Manager* em, int size, Entity_Type type);
@@ -132,42 +141,39 @@ void* _make_entity(Entity_Manager* em, int size, Entity_Type type);
 
 #define ENTITY_FUNCTIONS(entry) \
 entry(ET_Controller, tick_controller, draw_null) \
-entry(ET_Pawn, tick_pawn, draw_pawn) 
+entry(ET_Pawn, tick_pawn, draw_pawn) \
+entry(ET_Furniture, tick_furniture, draw_furniture) \
 
 void tick_null(Entity_Manager* em, Entity* entity, f32 dt) { }
 void draw_null(Entity_Manager* em, Entity* entity) { }
 
-typedef struct Path_Tile {
+typedef struct Path_Cell {
     b32 is_initialized;
-    Tile_Ref parent;
+    Cell_Ref parent;
     f32 f, g, h;
     b32 is_passable;
 
 #if DEBUG_BUILD
     int times_touched;
 #endif
-} Path_Tile;
+} Path_Cell;
 
 typedef struct Path_Map {
     int num_discovered;
-    Path_Tile* tiles;
+    Path_Cell* cells;
 } Path_Map;
 
 typedef struct Path {
-    Tile_Ref* refs;
-    int ref_count;
-
-#if DEBUG_BUILD
-    Path_Map path_map;
-#endif
+    Cell_Ref* points;
+    int point_count;
 } Path;
 
 /**
  * A* Pathfinding
  */
-b32 pathfind(Entity_Manager* em, Tile_Ref source, Tile_Ref dest, Path* path);
+b32 pathfind(Entity_Manager* em, Cell_Ref source, Cell_Ref dest, Path* path);
 
-#if DEBUG_BUILD
+#if 0
 
 void draw_pathfind_debug(Entity_Manager* em, Path path);
 

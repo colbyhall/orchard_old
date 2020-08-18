@@ -1,6 +1,7 @@
 #include "controller.h"
 #include "pawn.h"
 #include "gui.h"
+#include "furniture.h"
 
 Controller* make_controller(Entity_Manager* em, Vector2 location, f32 ortho_size) {
     Controller* result = make_entity(em, Controller);
@@ -64,7 +65,6 @@ static void tick_controller(Entity_Manager* em, Entity* entity, f32 dt) {
 
     if (is_hovering_widget()) return;
     
-
     if (g_platform->input.state.mouse_buttons_down[MOUSE_MIDDLE]) {
         Vector2 mouse_delta = v2((f32)g_platform->input.state.mouse_dx, (f32)g_platform->input.state.mouse_dy);
         f32 speed = ratio;
@@ -72,10 +72,10 @@ static void tick_controller(Entity_Manager* em, Entity* entity, f32 dt) {
         controller->location = v2_add(controller->location, v2_mul(v2_inverse(mouse_delta), v2s(speed)));
     }
 
-    // Tile Mode
+    // Cell Mode
     if (was_key_pressed(KEY_F1)) {
-        if (controller->mode == CM_Set_Tile) controller->mode = CM_Normal;
-        else controller->mode = CM_Set_Tile;
+        if (controller->mode == CM_Set_Cell) controller->mode = CM_Normal;
+        else controller->mode = CM_Set_Cell;
     }
 
     // Wall Mode
@@ -90,32 +90,6 @@ static void tick_controller(Entity_Manager* em, Entity* entity, f32 dt) {
         controller->selection.current = mouse_pos_in_world;
     }
 
-    if (controller->mode == CM_Normal) {
-        Vector2 target_location = v2_add(v2_floor(mouse_pos_in_world), v2s(0.5f));
-        if (was_mouse_button_pressed(MOUSE_LEFT)) {
-            make_pawn(em, target_location);
-        }
-
-        if (is_mouse_button_pressed(MOUSE_RIGHT)) {
-            for (entity_iterator(em)) {
-                Entity* e = entity_from_iterator(iter);
-                if (e->type == ET_Pawn) {
-                    Pawn* pawn = e->derived;
-
-                    f64 start = g_platform->time_in_seconds();
-                    b32 can_pathfind = pathfind(
-                        em, 
-                        tile_ref_from_location(e->location), 
-                        tile_ref_from_location(mouse_pos_in_world), 
-                        &pawn->path
-                    );
-                    f64 duration = g_platform->time_in_seconds() - start;
-                   //  o_log_error("[Game] Took %.3fms to do pathfinding", duration * 1000.f);
-                }
-            }
-        }
-    }
-
     if (was_mouse_button_released(MOUSE_LEFT)) {
         Rect selection = rect_from_points(controller->selection.start, controller->selection.current);
 
@@ -125,56 +99,59 @@ static void tick_controller(Entity_Manager* em, Entity* entity, f32 dt) {
         int end_y = (int)selection.max.y + 1;
 
         switch (controller->mode) {
-        case CM_Set_Tile: {
+        case CM_Set_Cell: {
             for (int x = start_x; x < end_x; ++x) {
                 for (int y = start_y; y < end_y; ++y) {
-                    Tile* tile = find_tile_at(em, x, y, 0);
-                    if (tile) tile->type = TT_Steel;
+                    Cell* cell = find_cell_at(em, x, y);
+                    if (cell) cell->floor_type = CFT_Steel_Panel;
                 }
             }
         } break;
         case CM_Set_Wall: {
             for (int x = start_x; x < end_x; ++x) {
-                Tile* start_y_tile = find_tile_at(em, x, start_y, 0);
-                if (start_y_tile) {
-                    start_y_tile->content = TC_Wall;
-                    start_y_tile->wall.type = WT_Steel;
-                    refresh_wall_visual(em, x, start_y, 0, true);
+                Cell* start_y_cell = find_cell_at(em, x, start_y);
+                if (start_y_cell) {
+                    start_y_cell->content = CC_Wall;
+                    start_y_cell->wall.type = WT_Steel;
+                    refresh_wall_visual(em, x, start_y, true);
                 }
 
-                Tile* end_y_tile = find_tile_at(em, x, end_y - 1, 0);
-                if (end_y_tile) {
-                    end_y_tile->content = TC_Wall;
-                    end_y_tile->wall.type = WT_Steel;
+                Cell* end_y_cell = find_cell_at(em, x, end_y - 1);
+                if (end_y_cell) {
+                    end_y_cell->content = CC_Wall;
+                    end_y_cell->wall.type = WT_Steel;
 
-                    refresh_wall_visual(em, x, end_y - 1, 0, true);
+                    refresh_wall_visual(em, x, end_y - 1, true);
                 }
             }
 
             for (int y = start_y; y < end_y; ++y) {
-                Tile* start_x_tile = find_tile_at(em, start_x, y, 0);
-                if (start_x_tile) {
-                    start_x_tile->content = TC_Wall;
-                    start_x_tile->wall.type = WT_Steel;
-                    refresh_wall_visual(em, start_x, y, 0, true);
+                Cell* start_x_cell = find_cell_at(em, start_x, y);
+                if (start_x_cell) {
+                    start_x_cell->content = CC_Wall;
+                    start_x_cell->wall.type = WT_Steel;
+                    refresh_wall_visual(em, start_x, y, true);
                 }
 
-                Tile* end_x_tile = find_tile_at(em, end_x - 1, y, 0);
-                if (end_x_tile) {
-                    end_x_tile->content = TC_Wall;
-                    end_x_tile->wall.type = WT_Steel;
-                    refresh_wall_visual(em, end_x - 1, y, 0, true);
+                Cell* end_x_cell = find_cell_at(em, end_x - 1, y);
+                if (end_x_cell) {
+                    end_x_cell->content = CC_Wall;
+                    end_x_cell->wall.type = WT_Steel;
+                    refresh_wall_visual(em, end_x - 1, y, true);
                 }
             }
+        } break;
+        case CM_Normal: {
+            make_furniture(em, &furniture_definitions[0], (Cell_Ref) { start_x, start_y }, FD_North);
         } break;
         }
     }
 
     if (controller->mode == CM_Set_Wall && was_mouse_button_pressed(MOUSE_RIGHT)) {
-        Tile* tile = find_tile_at(em, (int)mouse_pos_in_world.x, (int)mouse_pos_in_world.y, 0);
-        if (tile && tile->content == TC_Wall) {
-            tile->content = TC_None;
-            refresh_wall_visual(em, (int)mouse_pos_in_world.x, (int)mouse_pos_in_world.y, 0, true);
+        Cell* cell = find_cell_at(em, (int)mouse_pos_in_world.x, (int)mouse_pos_in_world.y);
+        if (cell && cell->content == CC_Wall) {
+            cell->content = CC_None;
+            refresh_wall_visual(em, (int)mouse_pos_in_world.x, (int)mouse_pos_in_world.y, true);
         }
     }
 }

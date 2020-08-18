@@ -27,6 +27,7 @@
 #include "entity_manager.c"
 #include "controller.c"
 #include "pawn.c"
+#include "furniture.c"
 #include "gui.c"
 
 Platform* g_platform = 0;
@@ -452,7 +453,7 @@ DLL_EXPORT void tick_game(f32 dt) {
 
         Controller* controller = find_entity_by_id(em, em->controller_id);
         if (controller) {
-            // Draw the tilemap
+            // Draw the cellmap
             set_shader(find_shader(from_cstr("assets/shaders/basic2d")));
             Texture2d* terrain = find_texture2d(from_cstr("assets/sprites/terrain_map"));
             set_uniform_texture("diffuse", *terrain);
@@ -460,32 +461,35 @@ DLL_EXPORT void tick_game(f32 dt) {
 
             Rect viewport_in_world_space = get_viewport_in_world_space(controller);
             
-            // Draw tile in a single batch
+            // Draw cell in a single batch
             for (int i = 0; i < WORLD_SIZE * WORLD_SIZE; ++i) {
                 Chunk* chunk = &em->chunks[i];
+
+                int chunk_y = i / WORLD_SIZE;
+                int chunk_x = i - chunk_y * WORLD_SIZE;
                 
-                Vector2 min = v2((f32)chunk->x * CHUNK_SIZE, (f32)chunk->y * CHUNK_SIZE);
+                Vector2 min = v2((f32)chunk_x * CHUNK_SIZE, (f32)chunk_y * CHUNK_SIZE);
                 Vector2 max = v2_add(min, v2(CHUNK_SIZE, CHUNK_SIZE));
                 Rect chunk_rect = { min, max };
 
                 if (!rect_overlaps_rect(viewport_in_world_space, chunk_rect, 0)) continue;
 
                 imm_begin();
-                Vector2 pos = v2((f32)(chunk->x * CHUNK_SIZE), (f32)(chunk->y * CHUNK_SIZE));
+                Vector2 pos = v2((f32)(chunk_x * CHUNK_SIZE), (f32)(chunk_y * CHUNK_SIZE));
                 for (int x = 0; x < CHUNK_SIZE; ++x) {
                     for (int y = 0; y < CHUNK_SIZE; ++y) {
-                        Tile* tile = &chunk->tiles[x + y * CHUNK_SIZE];
+                        Cell* cell = &chunk->cells[x + y * CHUNK_SIZE];
 
                         Vector2 tmin = v2_add(pos, v2((f32)x, (f32)y));
                         Vector2 tmax = v2_add(tmin, v2s(1.f));
                         Rect trect = { tmin, tmax };
-                        f32 tile_z = -5.f;
+                        f32 cell_z = -5.f;
 
                         // if (rect_overlaps_rect(viewport_in_world_space, trect)) continue;
 
                         int sprites_per_row = terrain->width / PIXELS_PER_METER;
-                        int sprite_y = tile->type / sprites_per_row;
-                        int sprite_x = tile->type - sprite_y * sprites_per_row;
+                        int sprite_y = cell->floor_type / sprites_per_row;
+                        int sprite_x = cell->floor_type - sprite_y * sprites_per_row;
 
                         f32 map_width = (f32)terrain->width;
                         f32 texel_size = 1.f / map_width;
@@ -498,10 +502,10 @@ DLL_EXPORT void tick_game(f32 dt) {
                         switch (controller->mode) {
                         case CM_Normal: 
                         case CM_Set_Wall:
-                            if (tile->type != TT_Open) imm_textured_rect(trect, tile_z, uv0, uv1, v4s(1.f));
+                            if (cell->floor_type != CFT_None) imm_textured_rect(trect, cell_z, uv0, uv1, v4s(1.f));
                             break;
-                        case CM_Set_Tile:
-                            imm_textured_rect(trect, tile_z, uv0, uv1, v4s(1.f)); 
+                        case CM_Set_Cell:
+                            imm_textured_rect(trect, cell_z, uv0, uv1, v4s(1.f)); 
                             break;
                         default: invalid_code_path;
                         }
@@ -515,29 +519,31 @@ DLL_EXPORT void tick_game(f32 dt) {
             set_uniform_texture("diffuse", *walls);
             for (int i = 0; i < WORLD_SIZE * WORLD_SIZE; ++i) {
                 Chunk* chunk = &em->chunks[i];
+
+                int chunk_y = i / WORLD_SIZE;
+                int chunk_x = i - chunk_y * WORLD_SIZE;
                 
-                Vector2 min = v2((f32)chunk->x * CHUNK_SIZE, (f32)chunk->y * CHUNK_SIZE);
+                Vector2 min = v2((f32)chunk_x * CHUNK_SIZE, (f32)chunk_y * CHUNK_SIZE);
                 Vector2 max = v2_add(min, v2(CHUNK_SIZE, CHUNK_SIZE));
                 Rect chunk_rect = { min, max };
 
                 if (!rect_overlaps_rect(viewport_in_world_space, chunk_rect, 0)) continue;
 
                 imm_begin();
-                Vector2 pos = v2((f32)(chunk->x * CHUNK_SIZE), (f32)(chunk->y * CHUNK_SIZE));
+                Vector2 pos = v2((f32)(chunk_x * CHUNK_SIZE), (f32)(chunk_y * CHUNK_SIZE));
                 for (int x = 0; x < CHUNK_SIZE; ++x) {
                     for (int y = 0; y < CHUNK_SIZE; ++y) {
-                        Tile* tile = &chunk->tiles[x + y * CHUNK_SIZE];
+                        Cell* cell = &chunk->cells[x + y * CHUNK_SIZE];
 
                         Vector2 tmin = v2_add(pos, v2((f32)x, (f32)y));
                         Vector2 tmax = v2_add(tmin, v2s(1.f));
                         Rect trect = { tmin, tmax };
                         f32 wall_z = -4.f;
 
-                        if (tile->content != TC_Wall) continue;
-                        // if (!rect_overlaps_rect(viewport_in_world_space, trect, 0)) continue;
+                        if (cell->content != CC_Wall) continue;
 
                         int sprite_y = 0;
-                        int sprite_x = tile->wall.visual;
+                        int sprite_x = cell->wall.visual;
 
                         f32 map_width = (f32)walls->width;
                         f32 texel_size = 1.f / map_width;
@@ -560,7 +566,7 @@ DLL_EXPORT void tick_game(f32 dt) {
                 f32 selection_z = -2.f;
 
                 switch (controller->mode) {
-                case CM_Set_Tile: {
+                case CM_Set_Cell: {
                     imm_begin();
                     imm_rect(selection, selection_z, selection_color);
                     imm_flush();
