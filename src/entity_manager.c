@@ -229,7 +229,7 @@ static f32 distance_between_cells(Cell_Ref a, Cell_Ref b) {
 
 static b32 is_cell_traversable(Cell* cell) {
     if (!cell) return false;
-    if (cell->content != CFT_None) return false;
+    if (cell->floor_type != CFT_None) return false;
 
     return true;
 }
